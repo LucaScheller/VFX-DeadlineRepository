@@ -1,0 +1,53 @@
+[About]
+Type=label
+Label=About
+Category=About Plugin
+CategoryOrder=-1
+Index=0
+Default=Houdini Husk Plugin for Deadline
+Description=Not configurable
+
+[ConcurrentTasks]
+Type=label
+Label=ConcurrentTasks
+Category=About Plugin
+CategoryOrder=-1
+Index=0
+Default=False
+Description=Not configurable
+
+[Houdini19_5_Husk_Executable]
+Label=Houdini 19.5 Husk Executable
+Category=Render Executables
+CategoryOrder=0
+Type=multilinemultifilename
+Index=0
+Default=C:\Program Files\Side Effects Software\Houdini 19.5.000\bin\husk.exe;/Applications/Houdini/Houdini19.5.000/Frameworks/Houdini.framework/Versions/19.5.000/Resources/bin/husk;/opt/hfs19.5/bin/husk
+Description=The path to the hython executable. It can be found in the Houdini bin folder.
+
+[Houdini20_0_Husk_Executable]
+Label=Houdini 20.0 Husk Executable
+Category=Render Executables
+CategoryOrder=0
+Type=multilinemultifilename
+Index=1
+Default=C:\Program Files\Side Effects Software\Houdini 20.0.000\bin\husk.exe;/Applications/Houdini/Houdini20.0.000/Frameworks/Houdini.framework/Versions/20.0.000/Resources/bin/husk;/opt/hfs20.0/bin/husk
+Description=The path to the hython executable. It can be found in the Houdini bin folder.
+
+[Houdini20_5_Husk_Executable]
+Label=Houdini 20.5 Husk Executable
+Category=Render Executables
+CategoryOrder=0
+Type=multilinemultifilename
+Index=2
+Default=C:\Program Files\Side Effects Software\Houdini 20.5.000\bin\husk.exe;/Applications/Houdini/Houdini20.5.000/Frameworks/Houdini.framework/Versions/20.5.000/Resources/bin/husk;/opt/hfs20.5/bin/husk
+Description=The path to the hython executable. It can be found in the Houdini bin folder.
+
+[EnablePathMapping]
+Type=boolean
+Category=Path Mapping (For Mixed Farms)
+CategoryOrder=2
+CategoryIndex=0
+Label=Enable Path Mapping
+Default=true
+Description=If enabled, Deadline will use Houdini's HOUDINI_PATHMAP environment variable to perform path mappings on the contents of the Houdini scene file. This feature can be turned off if there are no Path Mapping entries defined in the Repository Options.

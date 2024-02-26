@@ -1,0 +1,9 @@
+[Command]
+Type=string
+Label=Command
+Category=Configuration
+CategoryOrder=0
+Index=0
+Description=The command to run.
+Required=false
+DisableIfBlank=false
