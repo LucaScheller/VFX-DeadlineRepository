@@ -5,14 +5,6 @@ from dataclasses import dataclass
 _PACKAGE_ROOT = os.path.dirname(os.path.dirname(__file__))
 
 
-@dataclass
-class InventoryItem:
-    """Class for keeping track of an item in inventory."""
-    name: str
-    unit_price: float
-    quantity_on_hand: int = 0
-
-
 def env_to_bool(env):
     return env in [True, 1, "True", "true", "1", "Yes", "yes"]
 
