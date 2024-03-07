@@ -1,6 +1,5 @@
 
 # Job Dict Ref
-'''
 {
     "Props": {
         "Name": "Example - Command",
@@ -170,10 +169,8 @@
     "_id": "65dc3daaa34cc12b6e5102e4",
     "ExtraElements": null
 }
-'''
 
 import enum
-from datetime import datetime
 
 class AutoJobCleanupType(enum.Enum):
     DeleteJobs = "DeleteJobs"
@@ -208,18 +205,6 @@ class JobScheduledType(enum.Enum):
     Once = 1
     Daily = 2
     Custom = 3
-
-class Asset():
-    pass
-
-class Script():
-    pass
-
-class DateTime():
-    pass
-
-class TimeSpan():
-    pass
 
 class JobInternalData(dict):
     """Instead of storing nested dicts, we store the
@@ -877,7 +862,7 @@ class Job(object):
         return self._data.secondary_pool
 
     @JobSecondaryPool.setter
-    def JobSecondaryPool(self, value: str):
+    def JobSecondaryPool(self, value: string):
         """See getter.
         Args:
             value (string)
@@ -1729,7 +1714,7 @@ class Job(object):
         """
         return self._data.required_assets
 
-    def SetJobRequiredAssets(self, assets: list[Asset]):
+    def SetJobRequiredAssets(self, assets: list[Assets]):
         """Sets the assets that are required in order to render this job. The assets should contain absolute paths.
         Args:
             assets (list[Asset]):
@@ -2041,7 +2026,7 @@ class Job(object):
         return self._data.scheduled_type
 
     @JobScheduledType.setter
-    def JobScheduledType(self, value: str):
+    def JobScheduledType(self, value: string):
         """See getter.
         Args:
             value (string)
