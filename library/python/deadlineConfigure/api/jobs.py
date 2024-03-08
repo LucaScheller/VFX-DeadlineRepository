@@ -197,7 +197,7 @@ class JobInternalData(dict):
         self.department = "pipeline"
         self.comment = ""
         self.frames = []
-        self.frames_per_task = 1
+        self.framesPerTask = 1
         self.sequential = False
         self.onJobComplete = JobCompleteAction.Nothing
         # Job Environment
@@ -264,9 +264,9 @@ class JobInternalData(dict):
         self.resume_on_deleted_dependencies = False
         self.resume_on_failed_dependencies = False
         self.dependency_percentage_value = 100.0
-        self.is_frame_dependent = True
-        self.frame_dependency_offset_start = 0
-        self.frame_dependency_offset_end = 0
+        self.dependencyFrameEnabled = True
+        self.dependencyFrameOffsetStart = 0
+        self.dependencyFrameOffsetEnd = 0
         self.dependency_ids = []
         self.required_assets = []
         self.script_dependencies = []
@@ -375,8 +375,8 @@ class Job(object):
         self._data.userName = data["Props"]["User"]
         self._data.department = data["Props"]["Dept"]
         self._data.comment = data["Props"]["Cmmt"]
-        self._data.frames = data["Props"]["Frames"]
-        self._data.frames_per_task = data["Props"]["Chunk"]
+        self._data.frames = FrameList.convertFrameStringToFrameList(data["Props"]["Frames"])
+        self._data.framesPerTask = data["Props"]["Chunk"]
         self._data.sequential = data["Props"]["Seq"]
         self._data.onJobComplete = JobCompleteAction(data["Props"]["OnComp"])
         # Job Environment
@@ -446,9 +446,9 @@ class Job(object):
         self._data.resume_on_deleted_dependencies = data["Props"]["DepDel"]
         self._data.resume_on_failed_dependencies = data["Props"]["DepFail"]
         self._data.dependency_percentage_value = data["Props"]["DepPer"]
-        self._data.is_frame_dependent = data["Props"]["DepFrame"]
-        self._data.frame_dependency_offset_start = data["Props"]["DepFrameStart"]
-        self._data.frame_dependency_offset_end = data["Props"]["DepFrameEnd"]
+        self._data.dependencyFrameEnabled = data["Props"]["DepFrame"]
+        self._data.dependencyFrameOffsetStart = data["Props"]["DepFrameStart"]
+        self._data.dependencyFrameOffsetEnd = data["Props"]["DepFrameEnd"]
         self._data.dependency_ids = data["Props"]["Dep"]
         self._data.required_assets = data["Props"]["ReqAss"]
         self._data.script_dependencies = [
@@ -548,8 +548,8 @@ class Job(object):
         data["Props"]["User"] = self._data.userName
         data["Props"]["Dept"] = self._data.department
         data["Props"]["Cmmt"] = self._data.comment
-        data["Props"]["Frames"] = self._data.frames
-        data["Props"]["Chunk"] = self._data.frames_per_task
+        data["Props"]["Frames"] = FrameList.convertFrameListToFrameString(self._data.frames)
+        data["Props"]["Chunk"] = self._data.framesPerTask
         data["Props"]["Seq"] = self._data.sequential
         data["Props"]["OnComp"] = self._data.onJobComplete.value
         # Job Environment
@@ -618,9 +618,9 @@ class Job(object):
         data["Props"]["DepDel"] = self._data.resume_on_deleted_dependencies
         data["Props"]["DepFail"] = self._data.resume_on_failed_dependencies
         data["Props"]["DepPer"] = self._data.dependency_percentage_value
-        data["Props"]["DepFrame"] = self._data.is_frame_dependent
-        data["Props"]["DepFrameStart"] = self._data.frame_dependency_offset_start
-        data["Props"]["DepFrameEnd"] = self._data.frame_dependency_offset_end
+        data["Props"]["DepFrame"] = self._data.dependencyFrameEnabled
+        data["Props"]["DepFrameStart"] = self._data.dependencyFrameOffsetStart
+        data["Props"]["DepFrameEnd"] = self._data.dependencyFrameOffsetEnd
         data["Props"]["Dep"] = self._data.dependency_ids
         data["Props"]["ReqAss"] = self._data.required_assets
         data["Props"]["ScrDep"] = []
@@ -710,8 +710,9 @@ class Job(object):
         job_data["UserName"] = self._data.userName
         job_data["Department"] = self._data.department
         job_data["Comment"] = self._data.comment
-        job_data["Frames"] = '1001-1010' # TODO self._data.frames
-        job_data["ChunkSize"] = self._data.frames_per_task
+        job_data["Frames"] = FrameList.convertFrameListToFrameString(self._data.frames)
+        print(FrameList.convertFrameListToFrameString(self._data.frames), self._data.frames)
+        job_data["ChunkSize"] = self._data.framesPerTask
         job_data["Sequential"] = self._data.sequential
         job_data["OnJobComplete"] = self._data.onJobComplete.name
         # Job Environment
@@ -797,9 +798,9 @@ class Job(object):
         job_data["ResumeOnDeletedDependencies"] = self._data.resume_on_deleted_dependencies
         job_data["ResumeOnFailedDependencies"] = self._data.resume_on_failed_dependencies
         job_data["JobDependencyPercentage"] = self._data.dependency_percentage_value
-        job_data["IsFrameDependent"] = self._data.is_frame_dependent
-        job_data["FrameDependencyOffsetStart"] = self._data.frame_dependency_offset_start
-        job_data["FrameDependencyOffsetEnd"] = self._data.frame_dependency_offset_end
+        job_data["IsFrameDependent"] = self._data.dependencyFrameEnabled
+        job_data["FrameDependencyOffsetStart"] = self._data.dependencyFrameOffsetStart
+        job_data["FrameDependencyOffsetEnd"] = self._data.dependencyFrameOffsetEnd
         job_data["JobDependencies"] = ",".join(self._data.dependency_ids)
         job_data["RequiredAssets"] = self._data.required_assets
         job_data["ScriptDependencies"] = ",".join(
@@ -1002,18 +1003,21 @@ class Job(object):
         Returns:
             str: The frame list string.
         """
-        # TODO Add serialize
-        return ",".join(self._data.frames)
+        return FrameList.convertFrameListToFrameString(self._data.frames)
 
     @property
     def JobFramesList(self):
         """The job's frame list as an array.
         Args:
-            value (list[int])
+            value (list[int]): The frame list array.
         Returns:
             str: The frame list array.
         """
         return self._data.frames
+
+    @JobFramesList.setter
+    def JobFramesList(self, value):
+        self._data.frames = value
 
     @property
     def JobFramesPerTask(self):
@@ -1021,7 +1025,7 @@ class Job(object):
         Returns:
             int: Frames per task.
         """
-        return self._data.frames_per_task
+        return self._data.framesPerTask
 
     @property
     def JobSequentialJob(self):
@@ -2161,7 +2165,7 @@ class Job(object):
         Returns:
             bool:
         """
-        return self._data.is_frame_dependent
+        return self._data.dependencyFrameEnabled
 
     @JobIsFrameDependent.setter
     def JobIsFrameDependent(self, value: bool):
@@ -2169,7 +2173,7 @@ class Job(object):
         Args:
             value (bool)
         """
-        self._data.is_frame_dependent = value
+        self._data.dependencyFrameEnabled = value
 
     @property
     def JobFrameDependencyOffsetStart(self):
@@ -2177,7 +2181,7 @@ class Job(object):
         Returns:
             int:
         """
-        return self._data.frame_dependency_offset_start
+        return self._data.dependencyFrameOffsetStart
 
     @JobFrameDependencyOffsetStart.setter
     def JobFrameDependencyOffsetStart(self, value: int):
@@ -2185,7 +2189,7 @@ class Job(object):
         Args:
             value (int)
         """
-        self._data.frame_dependency_offset_start = value
+        self._data.dependencyFrameOffsetStart = value
 
     @property
     def JobFrameDependencyOffsetEnd(self):
@@ -2193,7 +2197,7 @@ class Job(object):
         Returns:
             int:
         """
-        return self._data.frame_dependency_offset_end
+        return self._data.dependencyFrameOffsetEnd
 
     @JobFrameDependencyOffsetEnd.setter
     def JobFrameDependencyOffsetEnd(self, value: int):
@@ -2201,7 +2205,7 @@ class Job(object):
         Args:
             value (int)
         """
-        self._data.frame_dependency_offset_end = value
+        self._data.dependencyFrameOffsetEnd = value
 
     @property
     def JobDependencyIDs(self):
