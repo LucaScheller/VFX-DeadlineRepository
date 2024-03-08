@@ -1,23 +1,29 @@
 from __future__ import annotations
-import enum
+
 import copy
+import enum
+import getpass
+import os
+import re
 from dataclasses import dataclass
 from datetime import datetime
-import getpass
-import re
+
 #########################################
 # Deadline Scripting API
 # This is a 1:1 Jobs Enum compatibility layer.
 #########################################
 
+
 class AutoJobCleanupType(enum.Enum):
     DeleteJobs = 0
     ArchiveJobs = 1
+
 
 class JobCompleteAction(enum.Enum):
     Archive = 0
     Delete = 1
     Nothing = 2
+
 
 class JobStatus(enum.Enum):
     Unknown = 0
@@ -26,6 +32,7 @@ class JobStatus(enum.Enum):
     Completed = 3
     Failed = 4
     Pending = 6
+
 
 class TaskOnTimeout(enum.Enum):
     ErrorAndNotify = 0
@@ -37,6 +44,7 @@ class TaskOnTimeout(enum.Enum):
     FailAndNotify = 6
     Fail = 7
 
+
 class JobScheduledType(enum.Enum):
     None_ = 0
     NotScheduled = None
@@ -44,26 +52,46 @@ class JobScheduledType(enum.Enum):
     Daily = 2
     Custom = 3
 
-class Asset():
-    pass
-
 @dataclass
-class Script():
+class AssetDependency:
     FileName: str
     Notes: str
     IgnoreFrameOffsets: bool
-          
+    IsFrameAware: bool
+    FrameString: str
+    OverrideFrameOffsets: bool
+    StartOffset: int
+    EndOffset: int
+
+@dataclass
+class ScriptDependency:
+    FileName: str
+    Notes: str
+    IgnoreFrameOffsets: bool
+
+@dataclass
+class PathMappingRule:
+    Path: str
+    WindowsPath: str
+    LinuxPath: str
+    MacPath: str
+    CaseSensitive: bool
+    RegularExpression: bool
+    Region: str
+
 class DateTime(datetime):
     pass
 
-class TimeSpan():
+
+class TimeSpan:
     pass
 
 
-class FrameList():
+class FrameList:
     @staticmethod
     def convertFrameListToFrameString(frameList):
         """Convert the frame list into a frame string.
+        As per deadline's specification, the frame string may contain duplicate entries.
         Args:
             frameList (list[int]): A list of frames.
         Returns:
@@ -101,27 +129,41 @@ class FrameList():
                 if framePreviousInterval != 1:
                     if len(frameStack) > 3:
                         if frameIter != len(frameList):
-                            frameString.append("{}-{}x{}".format(frameStack[0], frameStack[-2], framePreviousInterval))
+                            frameString.append(
+                                "{}-{}x{}".format(
+                                    frameStack[0], frameStack[-2], framePreviousInterval
+                                )
+                            )
                         else:
-                            frameString.append("{}-{}x{}".format(frameStack[0], frameStack[-1], framePreviousInterval))
+                            frameString.append(
+                                "{}-{}x{}".format(
+                                    frameStack[0], frameStack[-1], framePreviousInterval
+                                )
+                            )
                     else:
                         frameString.extend([str(f) for f in frameStack[:-1]])
                         frameString.append(str(frameStack[-1]))
                 else:
                     if frameIter != len(frameList):
-                        frameString.append("{}-{}".format(frameStack[0], frameStack[-2]))
+                        frameString.append(
+                            "{}-{}".format(frameStack[0], frameStack[-2])
+                        )
                     else:
-                        frameString.append("{}-{}".format(frameStack[0], frameStack[-1]))
+                        frameString.append(
+                            "{}-{}".format(frameStack[0], frameStack[-1])
+                        )
             else:
                 frameString.extend([str(f) for f in frameStack[:-1]])
             frameStack = frameStack[-1:]
             frameIntervals.clear()
             framePreviousInterval = -1
         return ",".join(frameString)
-    
+
     @staticmethod
     def convertFrameStringToFrameList(frameStr):
         """Convert the frame list into a frame string.
+        As per deadline's specification, the list may contain duplicate entries.
+
         Args:
             frameStr (str): A frame string.
         Returns:
@@ -138,32 +180,41 @@ class FrameList():
         for frameItem in frameItems:
             if frameItem.count(":") == 2:
                 frameStart, frameEnd, frameStep = frameItem.split(":")
-                frameList.extend(range(int(frameStart), int(frameEnd)+1, int(frameStep)))
-            elif frameItem.count("-") == 1 and (frameItem.count(":") == 1 or frameItem.count("x") == 1):
+                frameList.extend(
+                    range(int(frameStart), int(frameEnd) + 1, int(frameStep))
+                )
+            elif frameItem.count("-") == 1 and (
+                frameItem.count(":") == 1 or frameItem.count("x") == 1
+            ):
                 frameRange, frameStep = re.split(":|x", frameItem)
                 frameStart, frameEnd = frameRange.split("-")
                 if frameEnd < frameStart:
-                    frameRange = reversed(range(int(frameEnd), int(frameStart)+1, int(frameStep)))
+                    frameRange = reversed(
+                        range(int(frameEnd), int(frameStart) + 1, int(frameStep))
+                    )
                 else:
-                    frameRange = range(int(frameStart), int(frameEnd)+1, int(frameStep))
+                    frameRange = range(
+                        int(frameStart), int(frameEnd) + 1, int(frameStep)
+                    )
                 frameList.extend(frameRange)
             elif frameItem.count("-") == 1:
                 frameStart, frameEnd = frameItem.split("-")
                 if frameEnd < frameStart:
-                    frameRange = reversed(range(int(frameEnd), int(frameStart)+1))
+                    frameRange = reversed(range(int(frameEnd), int(frameStart) + 1))
                 else:
-                    frameRange = range(int(frameStart), int(frameEnd)+1)
+                    frameRange = range(int(frameStart), int(frameEnd) + 1)
                 frameList.extend(frameRange)
             else:
                 frameList.append(int(frameItem))
 
         return frameList
-    
+
 
 #########################################
 # Deadline Scripting API
 # This is a 1:1 Job Class compatibility layer.
 #########################################
+
 
 class JobInternalData(dict):
     """Instead of storing nested dicts, we store the
@@ -175,10 +226,10 @@ class JobInternalData(dict):
 
         self.setupData()
         self.resetChangeTracker()
-        
+
     def __getattribute__(self, __name: str) -> any:
         return super().__getattribute__(__name)
-    
+
     def __setattr__(self, __name: str, __value: any) -> None:
         if hasattr(self, "_change_set"):
             self._changeSet.add(__name)
@@ -187,8 +238,27 @@ class JobInternalData(dict):
     def setupData(self) -> None:
         """This defines the job defaults."""
 
+        # This data couldn't be mapped from the WebService API
+        _unknownData = {
+            "Props": {
+                "Region": "",
+                "OptIns": {},
+                "AWSPortalAssets": [],
+                "AWSPortalAssetFileWhitelist": [],
+            },
+            "ComFra": 0,
+            "SnglTskPrg": "0 %",
+            "Bad": [], # Bad Workers, can't be updated by WebService
+            "IsSub": True,
+            "Purged": False,
+            "DataSize": -1,
+            "ConcurrencyToken": None,
+            "ExtraElements": None,
+        }
+
         # Job General
-        self.id = ""
+        self.repository = ""
+        self.id = None
         self.name = "JobName"
         self.batchName = "JobBatchName"
         self.priority = 0
@@ -201,21 +271,22 @@ class JobInternalData(dict):
         self.sequential = False
         self.onJobComplete = JobCompleteAction.Nothing
         # Job Environment
-        self.env = {}
-        self.useJobEnvironmentOnly = False
+        self.environment = {}
+        self.environmentIsolateEnable = False
+        self.environmentSubmissionIncludeEnable = False
         # Job Info
         self.info = {}
         self.extraInfo = {}
-        self.extraInfoIndexed = {idx: "" for idx in range(0,10)}
+        self.extraInfoIndexed = {idx: "" for idx in range(0, 10)}
         # Job Files
-        self.outputDirectories = []
+        self.pathMapping = []
+        self.outputDirectoryPaths = []
         self.outputFileNames = []
         self.auxiliarySubmissionFileNames = []
-        self.auxiliarySyncAllFiles = False
-        self.network_root = ""
+        self.auxiliarySubmissionSyncFileEnable = False
         # Job Limits/Groups/Pools/Machines
         self.pool = ""
-        self.secondary_pool = ""
+        self.secondaryPool = ""
         self.group = ""
         self.limitGroups = []
         self.whitelistFlag = False
@@ -244,9 +315,9 @@ class JobInternalData(dict):
         self.concurrent_tasks = 10
         self.limit_tasks_to_number_of_cpus = True
         self.override_task_extra_info_names = False
-        self.taskExtraInfoNameIndex = {idx: "" for idx in range(0,10)}
+        self.taskExtraInfoNameIndex = {idx: "" for idx in range(0, 10)}
         self.plugin = ""
-        self.plugin_info = {}
+        self.pluginInfo = {}
         self.force_reload_plugin = False
         self.custom_plugin_directory = ""
         # Job Event Plugins
@@ -267,26 +338,27 @@ class JobInternalData(dict):
         self.dependencyFrameEnabled = True
         self.dependencyFrameOffsetStart = 0
         self.dependencyFrameOffsetEnd = 0
-        self.dependency_ids = []
-        self.required_assets = []
-        self.script_dependencies = []
+        self.dependencyJobs = []
+        self.dependencyAssets = []
+        self.dependencyScripts = []
         # Job Cleanup
         self.override_auto_job_cleanup = False
         self.auto_job_cleanup_type = AutoJobCleanupType.DeleteJobs
         self.override_job_cleanup = False
         self.override_job_cleanup_days = 0
         # Job Stats
-        self.submit_date_time = None
-        self.submit_machine = ""
-        self.started_date_time = None
-        self.completed_date_time = None
-        self.task_count = -1
-        self.queued_tasks = -1
-        self.rendering_tasks = -1
-        self.pending_tasks = -1
-        self.completed_tasks = -1
-        self.suspended_tasks = -1
-        self.failed_tasks = -1
+        self.statsJobSubmissionMachine = ""
+        self.statsJobSubmissionDateTime = None
+        self.statsJobStartedDateTime = None
+        self.statsJobCompletedDateTime = None
+        self.statsTasksCount = -1
+        self.statsTasksQueued = -1
+        self.statsTasksRendering = -1
+        self.statsTasksPending = -1
+        self.statsTasksCompleted = -1
+        self.statsTasksSuspended = -1
+        self.statsTasksFailed = -1
+        self.statsJobErrors = -1
         # Job Notifications
         self.override_notification_method = False
         self.notification_targets = []
@@ -329,10 +401,11 @@ class JobInternalData(dict):
     def resetChangeTracker(self):
         self._changeSet.clear()
 
+
 class Job(object):
     def __init__(self) -> None:
         self._data = JobInternalData()
-        self._unknownData = {}
+
     #########################################
     # Private
     #########################################
@@ -364,7 +437,7 @@ class Job(object):
         Args:
             data (dict): A REST API dict.
         Returns:
-            Job: The deserialized job object. 
+            Job: The deserialized job object.
         """
         # Job General
         self._data.id = data["_id"]
@@ -375,27 +448,30 @@ class Job(object):
         self._data.userName = data["Props"]["User"]
         self._data.department = data["Props"]["Dept"]
         self._data.comment = data["Props"]["Cmmt"]
-        self._data.frames = FrameList.convertFrameStringToFrameList(data["Props"]["Frames"])
+        self._data.frames = FrameList.convertFrameStringToFrameList(
+            data["Props"]["Frames"]
+        )
         self._data.framesPerTask = data["Props"]["Chunk"]
         self._data.sequential = data["Props"]["Seq"]
         self._data.onJobComplete = JobCompleteAction(data["Props"]["OnComp"])
         # Job Environment
-        self._data.env = data["Props"]["Env"]
-        self._data.useJobEnvironmentOnly = data["Props"]["EnvOnly"]
+        self._data.environment = data["Props"]["Env"]
+        self._data.environmentIsolateEnable = data["Props"]["EnvOnly"]
+        self._data.environmentSubmissionIncludeEnable = False
         # Job Info
-        self._data.info = None #TODO
+        self._data.info = {} # TODO HINT Deprecated
         self._data.extraInfo = data["Props"]["ExDic"]
         self._data.extraInfoIndexed = {
-            idx: data["Props"]["Ex{}".format(idx)] for idx in range(0,10)
+            idx: data["Props"]["Ex{}".format(idx)] for idx in range(0, 10)
         }
         # Job Files
-        self._data.outputDirectories = data["OutDir"]
+        self._data.outputDirectoryPaths = data["OutDir"]
         self._data.outputFileNames = data["OutFile"]
         self._data.auxiliarySubmissionFileNames = data["Aux"]
-        self._data.auxiliarySyncAllFiles = data["Props"]["AuxSync"]
+        self._data.auxiliarySubmissionSyncFileEnable = data["Props"]["AuxSync"]
         # Job Limits/Groups/Pools/Machines
         self._data.pool = data["Props"]["Pool"]
-        self._data.secondary_pool = data["Props"]["SecPool"]
+        self._data.secondaryPool = data["Props"]["SecPool"]
         self._data.group = data["Props"]["Grp"]
         self._data.limitGroups = data["Props"]["Limits"]
         self._data.whitelistFlag = data["Props"]["White"]
@@ -408,28 +484,30 @@ class Job(object):
         self._data.sendJobErrorWarning = data["Props"]["SndWarn"]
         self._data.overrideJobFailureDetection = data["Props"]["JobFailOvr"]
         self._data.failureDetectionJobErrors = data["Props"]["JobFailErr"]
+        self._data.override_task_failure_detection = data["Props"]["TskFailOvr"]
+        self._data.failureDetectionTaskErrors = data["Props"]["TskFailErr"]
         self._data.interruptable = data["Props"]["Int"]
         self._data.interruptablePercentage = data["Props"]["IntPer"]
         self._data.minRenderTimeSeconds = data["Props"]["MinTime"]
-        self._data.enableAutoTimeout = data["Props"]["Timeout"]
+        self._data.enableAutoTimeout = data["Props"]["AutoTime"]
         self._data.enableFrameTimeouts = data["Props"]["FrameTimeout"]
-        self._data.failureDetectionTaskErrors = None # TODO 
         self._data.ignore_bad_slave_detection = data["Props"]["NoBad"]
-        self._data.override_task_failure_detection = data["Props"]["TskFailOvr"]
         self._data.start_job_timeout_seconds = data["Props"]["StartTime"]
-        self._data.initialize_plugin_timeout_seconds = data["Props"]["InitializePluginTime"]
-        self._data.task_timeout_seconds = data["Props"]["MaxTime"] # TODO
-        self._data.on_task_timeout = TaskOnTimeout(data["Props"]["TskFailErr"])
+        self._data.initialize_plugin_timeout_seconds = data["Props"][
+            "InitializePluginTime"
+        ]
+        self._data.task_timeout_seconds = data["Props"]["MaxTime"]
+        self._data.on_task_timeout = TaskOnTimeout(data["Props"]["Timeout"])
         # Job Tasks
         self._data.concurrent_tasks = data["Props"]["Conc"]
         self._data.limit_tasks_to_number_of_cpus = data["Props"]["ConcLimt"]
         self._data.override_task_extra_info_names = data["Props"]["OvrTaskEINames"]
         self._data.taskExtraInfoNameIndex = {
-            idx: data["Props"]["TaskEx{}".format(idx)] for idx in range(0,10)
+            idx: data["Props"]["TaskEx{}".format(idx)] for idx in range(0, 10)
         }
         # Job Plugin
         self._data.plugin = data["Plug"]
-        self._data.plugin_info = data["Props"]["PlugInfo"]
+        self._data.pluginInfo = data["Props"]["PlugInfo"]
         self._data.force_reload_plugin = data["Props"]["Reload"]
         self._data.custom_plugin_directory = data["Props"]["PlugDir"]
         # Job Event Plugins
@@ -449,30 +527,48 @@ class Job(object):
         self._data.dependencyFrameEnabled = data["Props"]["DepFrame"]
         self._data.dependencyFrameOffsetStart = data["Props"]["DepFrameStart"]
         self._data.dependencyFrameOffsetEnd = data["Props"]["DepFrameEnd"]
-        self._data.dependency_ids = data["Props"]["Dep"]
-        self._data.required_assets = data["Props"]["ReqAss"]
-        self._data.script_dependencies = [
-            Script(FileName=s["FileName"],
-                   Notes=s["Notes"],
-                   IgnoreFrameOffsets=s["IgnoreFrameOffsets"]) for s in data["Props"]["ScrDep"]
+        self._data.dependencyJobs = data["Props"]["Dep"]
+        self._data.dependencyAssets = [
+            AssetDependency(
+                FileName=d["FileName"],
+                Notes=d["Notes"],
+                IgnoreFrameOffsets=d["IgnoreFrameOffsets"],
+                IsFrameAware=d["IsFrameAware"],
+                FrameString=d["FrameString"],
+                OverrideFrameOffsets=d["OverrideFrameOffsets"],
+                StartOffset=d["StartOffset"],
+                EndOffset=d["EndOffset"],
+            )
+            for d in data["Props"]["ReqAss"]
+        ]
+        self._data.dependencyScripts = [
+            ScriptDependency(
+                FileName=s["FileName"],
+                Notes=s["Notes"],
+                IgnoreFrameOffsets=s["IgnoreFrameOffsets"],
+            )
+            for s in data["Props"]["ScrDep"]
         ]
         # Job Cleanup
         self._data.override_auto_job_cleanup = data["Props"]["OverAutoClean"]
-        self._data.auto_job_cleanup_type = AutoJobCleanupType(data["Props"]["OverCleanType"])
+        self._data.auto_job_cleanup_type = AutoJobCleanupType(
+            data["Props"]["OverCleanType"]
+        )
         self._data.override_job_cleanup = data["Props"]["OverClean"]
         self._data.override_job_cleanup_days = data["Props"]["OverCleanDays"]
         # Job Stats
-        self._data.submit_date_time = data["Date"]
-        self._data.submit_machine = data["Mach"]
-        self._data.started_date_time = data["DateStart"]
-        self._data.completed_date_time = data["DateComp"]
-        self._data.task_count = data["Props"]["Tasks"]
-        self._data.queued_tasks = data["QueuedChunks"]
-        self._data.rendering_tasks = data["RenderingChunks"]
-        self._data.pending_tasks = data["PendingChunks"]
-        self._data.completed_tasks = data["CompletedChunks"]
-        self._data.suspended_tasks = data["SuspendedChunks"]
-        self._data.failed_tasks = data["FailedChunks"]
+        self._data.statsJobSubmissionDateTime = data["Date"]
+        self._data.statsJobSubmissionMachine = data["Mach"]
+        self._data.statsJobStartedDateTime = data["DateStart"]
+        self._data.statsJobCompletedDateTime = data["DateComp"]
+        self._data.statsJobErrors = data["Errs"]
+        self._data.statsTasksCount = data["Props"]["Tasks"]
+        self._data.statsTasksQueued = data["QueuedChunks"]
+        self._data.statsTasksRendering = data["RenderingChunks"]
+        self._data.statsTasksPending = data["PendingChunks"]
+        self._data.statsTasksCompleted = data["CompletedChunks"]
+        self._data.statsTasksSuspended = data["SuspendedChunks"]
+        self._data.statsTasksFailed = data["FailedChunks"]
         # Job Notifications
         self._data.override_notification_method = data["Props"]["NotOvr"]
         self._data.notification_targets = data["Props"]["NotUser"]
@@ -489,7 +585,7 @@ class Job(object):
         self._data.scheduled_days = data["Props"]["SchdDays"]
         self._data.scheduled_start_date_time = data["Props"]["SchdDate"]
         self._data.scheduled_end_date_time = data["Props"]["SchdStop"]
-        self._data.disabled_schedule_time = False # TODO
+        # self._data.disabled_schedule_time = data[""] # TODO HINT NotImplemented
         self._data.scheduled_day_monday_start_time_span = data["Props"]["MonStart"]
         self._data.scheduled_day_monday_end_time_span = data["Props"]["MonStop"]
         self._data.scheduled_day_tuesday_start_time_span = data["Props"]["TueStart"]
@@ -512,33 +608,12 @@ class Job(object):
         self.tile_job_tiles_in_x = data["TileX"]
         self.tile_job_tiles_in_y = data["TileY"]
 
-        self._unknownData = {
-            "Props": {
-                "Region": "",
-                "PathMap": [],
-                "AutoTime": False,
-                "OptIns": {},
-                "AWSPortalAssets": [],
-                "AWSPortalAssetFileWhitelist": [],
-            },
-            "ComFra": 0,
-            "IsSub": True,
-            "Purged": False,
-            "Bad": [],
-            "SnglTskPrg": "0 %",
-            "Errs": 0,
-            "DataSize": -1,
-            "ConcurrencyToken": None,
-            "ExtraElements": None
-        }
-
     def serializeWebAPI(self) -> dict:
         """Serialize this class to the Web API compatible format.
         Returns:
-            dict: The serialized job object. 
+            dict: The serialized job object.
         """
         data = {"Props": {}}
-        data.update(self._unknownData)
         # Job General
         data["_id"] = self._data.id
         data["Props"]["Name"] = self._data.name
@@ -548,26 +623,47 @@ class Job(object):
         data["Props"]["User"] = self._data.userName
         data["Props"]["Dept"] = self._data.department
         data["Props"]["Cmmt"] = self._data.comment
-        data["Props"]["Frames"] = FrameList.convertFrameListToFrameString(self._data.frames)
+        data["Props"]["Frames"] = FrameList.convertFrameListToFrameString(
+            self._data.frames
+        )
         data["Props"]["Chunk"] = self._data.framesPerTask
         data["Props"]["Seq"] = self._data.sequential
         data["Props"]["OnComp"] = self._data.onJobComplete.value
         # Job Environment
-        data["Props"]["Env"] = self._data.env
-        data["Props"]["EnvOnly"] = self._data.useJobEnvironmentOnly
+        data["Props"]["Env"] = self._data.environment
+        data["Props"]["EnvOnly"] = self._data.environmentIsolateEnable
+        if self._data.id is None:
+            # On submission env merge
+            if self._data.environmentSubmissionIncludeEnable:
+                systemEnv = copy.deepcopy(os.environ.items())
+                systemEnv.update(copy.deepcopy(self._data.environment))
+                data["Props"]["Env"] = systemEnv
         # Job Info
-        # self._data.info = None #TODO
+        # data[""] = self._data.info # TODO HINT Deprecated
         data["Props"]["ExDic"] = self._data.extraInfo
         for key, value in self._data.extraInfoIndexed.items():
             data["Props"]["Ex{}".format(key)] = value
         # Job Files
-        data["OutDir"] = self._data.outputDirectories
+        data["Props"]["PathMapping"] = []
+        for pathMappingRule in self._data.pathMapping:
+            data["Props"]["PathMapping"].append(
+                {
+                    "Path": pathMappingRule.Path,
+                    "WindowsPath": pathMappingRule.WindowsPath,
+                    "LinuxPath": pathMappingRule.LinuxPath,
+                    "MacPath": pathMappingRule.MacPath,
+                    "CaseSensitive": pathMappingRule.CaseSensitive,
+                    "RegularExpression": pathMappingRule.RegularExpression,
+                    "Region": pathMappingRule.Region
+                }
+            )
+        data["OutDir"] = self._data.outputDirectoryPaths
         data["OutFile"] = self._data.outputFileNames
         data["Aux"] = self._data.auxiliarySubmissionFileNames
-        data["Props"]["AuxSync"] = self._data.auxiliarySyncAllFiles
+        data["Props"]["AuxSync"] = self._data.auxiliarySubmissionSyncFileEnable
         # Job Limits/Groups/Pools/Machines
         data["Props"]["Pool"] = self._data.pool
-        data["Props"]["SecPool"] = self._data.secondary_pool 
+        data["Props"]["SecPool"] = self._data.secondaryPool
         data["Props"]["Grp"] = self._data.group
         data["Props"]["Limits"] = self._data.limitGroups
         data["Props"]["White"] = self._data.whitelistFlag
@@ -582,25 +678,27 @@ class Job(object):
         data["Props"]["Int"] = self._data.interruptable
         data["Props"]["IntPer"] = self._data.interruptablePercentage
         data["Props"]["MinTime"] = self._data.minRenderTimeSeconds
-        data["Props"]["Timeout"] = self._data.enableAutoTimeout
+        data["Props"]["AutoTime"] = self._data.enableAutoTimeout
+        data["Props"]["Timeout"] = self._data.on_task_timeout.value
         data["Props"]["FrameTimeout"] = self._data.enableFrameTimeouts
         data["Props"]["RemTmT"] = self._data.remainingTimeThreshold
-        # self._data.failure_detection_task_errors = None # TODO 
         data["Props"]["NoBad"] = self._data.ignore_bad_slave_detection
         data["Props"]["TskFailOvr"] = self._data.override_task_failure_detection
         data["Props"]["StartTime"] = self._data.start_job_timeout_seconds
         data["Props"]["InitializePluginTime"] = self._data.initialize_plugin_timeout_seconds
-        data["Props"]["MaxTime"] = self._data.task_timeout_seconds # TODO
-        data["Props"]["TskFailErr"] = self._data.on_task_timeout.value # TODO
+        data["Props"]["MaxTime"] = self._data.task_timeout_seconds
+        data["Props"]["TskFailErr"] = self._data.failureDetectionTaskErrors
         # Job Tasks
         data["Props"]["Conc"] = self._data.concurrent_tasks
         data["Props"]["ConcLimt"] = self._data.limit_tasks_to_number_of_cpus
         data["Props"]["OvrTaskEINames"] = self._data.override_task_extra_info_names
         for idx in range(0, 10):
-            data["Props"]["TaskEx{}".format(idx)] = self._data.taskExtraInfoNameIndex[idx]
+            data["Props"]["TaskEx{}".format(idx)] = self._data.taskExtraInfoNameIndex[
+                idx
+            ]
         # Job Plugin
         data["Plug"] = self._data.plugin
-        data["Props"]["PlugInfo"] = self._data.plugin_info
+        data["Props"]["PlugInfo"] = self._data.pluginInfo
         data["Props"]["Reload"] = self._data.force_reload_plugin
         data["Props"]["PlugDir"] = self._data.custom_plugin_directory
         # Job Event Plugins
@@ -621,15 +719,28 @@ class Job(object):
         data["Props"]["DepFrame"] = self._data.dependencyFrameEnabled
         data["Props"]["DepFrameStart"] = self._data.dependencyFrameOffsetStart
         data["Props"]["DepFrameEnd"] = self._data.dependencyFrameOffsetEnd
-        data["Props"]["Dep"] = self._data.dependency_ids
-        data["Props"]["ReqAss"] = self._data.required_assets
+        data["Props"]["Dep"] = self._data.dependencyJobs
+        data["Props"]["ReqAss"] = []
+        for assetDependency in self._data.dependencyAssets:
+            data["Props"]["ReqAss"].append(
+                {
+                    "FileName": assetDependency.FileName,
+                    "Notes": assetDependency.Notes,
+                    "IgnoreFrameOffsets": assetDependency.IgnoreFrameOffsets,
+                    "IsFrameAware": assetDependency.IsFrameAware,
+                    "FrameString": assetDependency.FrameString,
+                    "OverrideFrameOffsets": assetDependency.OverrideFrameOffsets,
+                    "StartOffset": assetDependency.StartOffset,
+                    "EndOffset": assetDependency.EndOffset
+                }
+            )
         data["Props"]["ScrDep"] = []
-        for script in self._data.script_dependencies:
+        for scriptDependency in self._data.dependencyScripts:
             data["Props"]["ScrDep"].append(
                 {
-                    "FileName": script.FileName,
-                    "Notes": script.Notes,
-                    "IgnoreFrameOffsets": script.IgnoreFrameOffsets,
+                    "FileName": scriptDependency.FileName,
+                    "Notes": scriptDependency.Notes,
+                    "IgnoreFrameOffsets": scriptDependency.IgnoreFrameOffsets,
                 }
             )
         # Job Cleanup
@@ -638,17 +749,17 @@ class Job(object):
         data["Props"]["OverClean"] = self._data.override_job_cleanup
         data["Props"]["OverCleanDays"] = self._data.override_job_cleanup_days
         # Job Stats
-        data["Date"] = self._data.submit_date_time
-        data["Mach"] = self._data.submit_machine
-        data["DateStart"] = self._data.started_date_time
-        data["DateComp"] = self._data.completed_date_time
-        data["Props"]["Tasks"] = self._data.task_count 
-        data["QueuedChunks"] = self._data.queued_tasks
-        data["RenderingChunks"] = self._data.rendering_tasks
-        data["PendingChunks"] = self._data.pending_tasks
-        data["CompletedChunks"] = self._data.completed_tasks
-        data["SuspendedChunks"] = self._data.suspended_tasks
-        data["FailedChunks"] = self._data.failed_tasks 
+        data["Date"] = self._data.statsJobSubmissionDateTime
+        data["Mach"] = self._data.statsJobSubmissionMachine
+        data["DateStart"] = self._data.statsJobStartedDateTime
+        data["DateComp"] = self._data.statsJobCompletedDateTime
+        data["Props"]["Tasks"] = self._data.statsTasksCount
+        data["QueuedChunks"] = self._data.statsTasksQueued
+        data["RenderingChunks"] = self._data.statsTasksRendering
+        data["PendingChunks"] = self._data.statsTasksPending
+        data["CompletedChunks"] = self._data.statsTasksCompleted
+        data["SuspendedChunks"] = self._data.statsTasksSuspended
+        data["FailedChunks"] = self._data.statsTasksFailed
         # Job Notifications
         data["Props"]["NotOvr"] = self._data.override_notification_method
         data["Props"]["NotUser"] = self._data.notification_targets
@@ -690,7 +801,9 @@ class Job(object):
 
         return data
 
-    def serializeSubmissionCommandFiles(self, job_file_path: str, plugin_file_path: str):
+    def serializeSubmissionCommandFiles(
+        self, job_file_path: str, plugin_file_path: str
+    ):
         """Serialize this class to the deadlinecommand submission files.
         Args:
             job_file_path (str): The job submission data file path.
@@ -711,45 +824,48 @@ class Job(object):
         job_data["Department"] = self._data.department
         job_data["Comment"] = self._data.comment
         job_data["Frames"] = FrameList.convertFrameListToFrameString(self._data.frames)
-        print(FrameList.convertFrameListToFrameString(self._data.frames), self._data.frames)
         job_data["ChunkSize"] = self._data.framesPerTask
         job_data["Sequential"] = self._data.sequential
         job_data["OnJobComplete"] = self._data.onJobComplete.name
         # Job Environment
         env_idx = -1
-        for key, value in self._data.env:
-            env_idx +=1 
-            job_data["EnvironmentKeyValue{}".format(env_idx)] = "{}={}".format(key, value)
-        job_data["UseJobEnvironmentOnly"] = self._data.useJobEnvironmentOnly
-        # TODO IncludeEnvironment
+        for key, value in self._data.environment:
+            env_idx += 1
+            job_data["EnvironmentKeyValue{}".format(env_idx)] = "{}={}".format(
+                key, value
+            )
+        job_data["UseJobEnvironmentOnly"] = self._data.environmentIsolateEnable
+        job_data["IncludeEnvironment"] = self._data.environmentSubmissionIncludeEnable
         # Job Info
-        # self._data.info = None #TODO
+        # job_data[""] = self._data.info # TODO HINT Deprecated
         extra_info_idx = -1
         for key, value in self._data.extraInfo.items():
-            extra_info_idx +=1 
-            job_data["ExtraInfoKeyValue{}".format(extra_info_idx)] = "{}={}".format(key, value)
+            extra_info_idx += 1
+            job_data["ExtraInfoKeyValue{}".format(extra_info_idx)] = "{}={}".format(
+                key, value
+            )
         for key, value in self._data.extraInfoIndexed.items():
             job_data["ExtraInfo{}".format(key)] = value
         # Job Files
-        for idx, output_directory in enumerate(self._data.outputDirectories):
+        for idx, output_directory in enumerate(self._data.outputDirectoryPaths):
             job_data["OutputDirectory{}".format(idx)] = output_directory
         if not self._data.tile_job:
             for idx, output_file_name in enumerate(self._data.outputFileNames):
                 job_data["OutputFilename{}".format(idx)] = output_file_name
         for auxiliary_submission_file_name in self._data.auxiliarySubmissionFileNames:
             args.append(auxiliary_submission_file_name)
-        job_data["SynchronizeAllAuxiliaryFiles"] = self._data.auxiliarySyncAllFiles
-        if self._data.network_root:
-            job_data["NetworkRoot"] = self._data.network_root
+        job_data["SynchronizeAllAuxiliaryFiles"] = self._data.auxiliarySubmissionSyncFileEnable
+        if self._data.repository:
+            job_data["NetworkRoot"] = self._data.repository
         # Job Limits/Groups/Pools/Machines
         job_data["Pool"] = self._data.pool
-        job_data["SecondaryPool"] = self._data.secondary_pool 
+        job_data["SecondaryPool"] = self._data.secondaryPool
         job_data["Group"] = self._data.group
         job_data["LimitGroups"] = ",".join(self._data.limitGroups)
         if self._data.whitelistFlag:
-            job_data["Allowlist"] = self._data.listedSlaves
+            job_data["Allowlist"] = ",".join(self._data.listedSlaves)
         else:
-            job_data["Denylist"] = self._data.listedSlaves
+            job_data["Denylist"] = ",".join(self._data.listedSlaves)
         job_data["MachineLimit"] = self._data.machineLimit
         job_data["MachineLimitProgress"] = self._data.machineLimitProgress
         # Job State
@@ -765,46 +881,61 @@ class Job(object):
         job_data["RemTimeThreshold"] = self._data.remainingTimeThreshold
         job_data["FailureDetectionTaskErrors"] = self._data.failureDetectionTaskErrors
         job_data["IgnoreBadJobDetection"] = self._data.ignore_bad_slave_detection
-        job_data["OverrideTaskFailureDetection"] = self._data.override_task_failure_detection
+        job_data["OverrideTaskFailureDetection"] = (
+            self._data.override_task_failure_detection
+        )
         job_data["StartJobTimeoutSeconds"] = self._data.start_job_timeout_seconds
-        job_data["InitializePluginTimeoutSeconds"] = self._data.initialize_plugin_timeout_seconds
+        job_data["InitializePluginTimeoutSeconds"] = (
+            self._data.initialize_plugin_timeout_seconds
+        )
         job_data["TaskTimeoutSeconds"] = self._data.task_timeout_seconds
-        # data["Props"]["TskFailErr"] = self._data.on_task_timeout.value # TODO
-        # TODO OnTaskTimeout
+        job_data["OnTaskTimeout"] = self._data.on_task_timeout.value
         # Job Tasks
         job_data["ConcurrentTasks"] = self._data.concurrent_tasks
-        job_data["LimitConcurrentTasksToNumberOfCpus"] = self._data.limit_tasks_to_number_of_cpus
-        job_data["OverrideTaskExtraInfoNames"] = self._data.override_task_extra_info_names
+        job_data["LimitConcurrentTasksToNumberOfCpus"] = (
+            self._data.limit_tasks_to_number_of_cpus
+        )
+        job_data["OverrideTaskExtraInfoNames"] = (
+            self._data.override_task_extra_info_names
+        )
         for key, value in self._data.taskExtraInfoNameIndex.items():
             job_data["TaskExtraInfoName{}".format(key)] = value
         # Job Plugin
         job_data["Plugin"] = self._data.plugin
-        for key, value in self._data.plugin_info.items():
+        for key, value in self._data.pluginInfo.items():
             plugin_data[key] = value
         job_data["ForceReloadPlugin"] = self._data.force_reload_plugin
         job_data["CustomPluginDirectory"] = self._data.custom_plugin_directory
         # Job Event Plugins
         job_data["SuppressEvents"] = self._data.suppress_events
-        # TODO data["Props"]["EventDir"] = self._data.custom_event_plugin_directory
+        # data["Props"]["EventDir"] = self._data.custom_event_plugin_directory # TODO HINT NotImplemented
         job_data["EventOptIns"] = ",".join(self._data.event_opt_ins)
         # Job Pre/Post (Task) Scripts
         job_data["PreJobScript"] = self._data.pre_job_script
         job_data["PostJobScript"] = self._data.post_job_script
         job_data["PreTaskScript"] = self._data.pre_task_script
         job_data["PostTaskScript"] = self._data.post_task_script
-        job_data["EnableTimeoutsForScriptTasks"] = self._data.enable_script_tasks_timeouts
+        job_data["EnableTimeoutsForScriptTasks"] = (
+            self._data.enable_script_tasks_timeouts
+        )
         # Job Dependencies
-        job_data["ResumeOnCompleteDependencies"] = self._data.resume_on_complete_dependencies
-        job_data["ResumeOnDeletedDependencies"] = self._data.resume_on_deleted_dependencies
-        job_data["ResumeOnFailedDependencies"] = self._data.resume_on_failed_dependencies
+        job_data["ResumeOnCompleteDependencies"] = (
+            self._data.resume_on_complete_dependencies
+        )
+        job_data["ResumeOnDeletedDependencies"] = (
+            self._data.resume_on_deleted_dependencies
+        )
+        job_data["ResumeOnFailedDependencies"] = (
+            self._data.resume_on_failed_dependencies
+        )
         job_data["JobDependencyPercentage"] = self._data.dependency_percentage_value
         job_data["IsFrameDependent"] = self._data.dependencyFrameEnabled
         job_data["FrameDependencyOffsetStart"] = self._data.dependencyFrameOffsetStart
         job_data["FrameDependencyOffsetEnd"] = self._data.dependencyFrameOffsetEnd
-        job_data["JobDependencies"] = ",".join(self._data.dependency_ids)
-        job_data["RequiredAssets"] = self._data.required_assets
+        job_data["JobDependencies"] = ",".join(self._data.dependencyJobs)
+        job_data["RequiredAssets"] = self._data.dependencyAssets
         job_data["ScriptDependencies"] = ",".join(
-            [script.FileName for script in self._data.script_dependencies]
+            [script.FileName for script in self._data.dependencyScripts]
         )
         # Job Cleanup
         job_data["OverrideAutoJobCleanup"] = self._data.override_auto_job_cleanup
@@ -812,7 +943,7 @@ class Job(object):
         job_data["OverrideJobCleanup"] = self._data.override_job_cleanup
         job_data["JobCleanupDays"] = self._data.override_job_cleanup_days
         # Job Stats
-        job_data["MachineName"] = self._data.submit_machine
+        job_data["MachineName"] = self._data.statsJobSubmissionMachine
         # Job Notifications
         job_data["OverrideNotificationMethod"] = self._data.override_notification_method
         job_data["NotificationTargets"] = ",".join(self._data.notification_targets)
@@ -831,22 +962,50 @@ class Job(object):
         if self._data.scheduled_type != JobScheduledType.None_:
             job_data["ScheduledDays"] = self._data.scheduled_days
             job_data["ScheduledStartDateTime"] = self._data.scheduled_start_date_time
-            # self._data.disabled_schedule_time = False # TODO
+            # job_data[""] = self._data.disabled_schedule_time # TODO HINT NotImplemented
             if self._data.scheduled_type == JobScheduledType.Custom:
-                job_data["ScheduledMondayStartTime"] = self._data.scheduled_day_monday_start_time_span
-                job_data["ScheduledMondayStopTime"] = self._data.scheduled_day_monday_end_time_span
-                job_data["ScheduledTuesdayStartTime"] = self._data.scheduled_day_tuesday_start_time_span
-                job_data["ScheduledTuesdayStopTime"] = self._data.scheduled_day_tuesday_end_time_span
-                job_data["ScheduledWednesdayStartTime"] = self._data.scheduled_day_wednesday_start_time_span
-                job_data["ScheduledWednesdayStopTime"] = self._data.scheduled_day_wednesday_end_time_span
-                job_data["ScheduledThursdayStartTime"] = self._data.scheduled_day_thursday_start_time_span
-                job_data["ScheduledThursdayStopTime"] = self._data.scheduled_day_thursday_end_time_span
-                job_data["ScheduledFridayStartTime"] = self._data.scheduled_day_friday_start_time_span
-                job_data["ScheduledFridayStopTime"] = self._data.scheduled_day_friday_end_time_span
-                job_data["ScheduledSaturdayStartTime"] = self._data.scheduled_day_saturday_start_time_span
-                job_data["ScheduledSaturdayStopTime"] = self._data.scheduled_day_saturday_end_time_span
-                job_data["ScheduledSundayStartTime"] = self._data.scheduled_day_sunday_start_time_span
-                job_data["ScheduledSundayStopTime"] = self._data.scheduled_day_sunday_end_time_span
+                job_data["ScheduledMondayStartTime"] = (
+                    self._data.scheduled_day_monday_start_time_span
+                )
+                job_data["ScheduledMondayStopTime"] = (
+                    self._data.scheduled_day_monday_end_time_span
+                )
+                job_data["ScheduledTuesdayStartTime"] = (
+                    self._data.scheduled_day_tuesday_start_time_span
+                )
+                job_data["ScheduledTuesdayStopTime"] = (
+                    self._data.scheduled_day_tuesday_end_time_span
+                )
+                job_data["ScheduledWednesdayStartTime"] = (
+                    self._data.scheduled_day_wednesday_start_time_span
+                )
+                job_data["ScheduledWednesdayStopTime"] = (
+                    self._data.scheduled_day_wednesday_end_time_span
+                )
+                job_data["ScheduledThursdayStartTime"] = (
+                    self._data.scheduled_day_thursday_start_time_span
+                )
+                job_data["ScheduledThursdayStopTime"] = (
+                    self._data.scheduled_day_thursday_end_time_span
+                )
+                job_data["ScheduledFridayStartTime"] = (
+                    self._data.scheduled_day_friday_start_time_span
+                )
+                job_data["ScheduledFridayStopTime"] = (
+                    self._data.scheduled_day_friday_end_time_span
+                )
+                job_data["ScheduledSaturdayStartTime"] = (
+                    self._data.scheduled_day_saturday_start_time_span
+                )
+                job_data["ScheduledSaturdayStopTime"] = (
+                    self._data.scheduled_day_saturday_end_time_span
+                )
+                job_data["ScheduledSundayStartTime"] = (
+                    self._data.scheduled_day_sunday_start_time_span
+                )
+                job_data["ScheduledSundayStopTime"] = (
+                    self._data.scheduled_day_sunday_end_time_span
+                )
         # Job Tile Rendering
         job_data["TileJob"] = self._data.tile_job
         if self._data.tile_job:
@@ -857,7 +1016,9 @@ class Job(object):
             output_tile_idx = -1
             for output_tile_file_name in self._data.output_tile_file_names:
                 output_tile_idx += 1
-                job_data["OutputFilename{}Tile?".format(output_tile_idx)] = output_tile_file_name
+                job_data["OutputFilename{}Tile?".format(output_tile_idx)] = (
+                    output_tile_file_name
+                )
 
         # Write job submission file
         with open(job_file_path, "w") as job_file:
@@ -881,14 +1042,29 @@ class Job(object):
     # As we can use this class to construct jobs
     # additional setters have been added.
     # Differences:
+    #   JobRepository -> Added Property
     #   JobStatus -> Signature Enum JobStatus
-    #             -> Added Property Setter 
+    #             -> Added Property Setter
     #   JobOnJobComplete -> Signature Enum JobCompleteAction
+    #   JobPathMapping -> Added Property
     #   JobAuxiliarySubmissionFileNames -> Added Property Setter
-
     #########################################
-    
+
     # Job General
+    @property
+    def JobRepository(self):
+        """The job's repository to submit to.
+        Args:
+            value (str): The repository name.
+        Returns:
+            str: The repository name.
+        """
+        return self._data.repository
+
+    @JobRepository.setter
+    def JobRepository(self, value: str):
+        self._data.repository = value
+
     @property
     def JobId(self):
         """The job's ID.
@@ -1052,7 +1228,7 @@ class Job(object):
             str: The action name.
         """
         return self._data.onJobComplete
-    
+
     @JobOnJobComplete.setter
     def JobOnJobComplete(self, value: str):
         self._data.onJobComplete = JobCompleteAction(value)
@@ -1063,7 +1239,7 @@ class Job(object):
         Returns:
             list[str]: A list of keys
         """
-        return self._data.env.keys()
+        return self._data.environment.keys()
 
     def GetJobEnvironmentKeyValue(self, key: str):
         """Gets the environment variable value for the given key.
@@ -1072,22 +1248,38 @@ class Job(object):
         Returns:
             str | None: The value of the env variable.
         """
-        return self._data.env.get(key, None)
+        return self._data.environment.get(key, None)
 
     def SetJobEnvironmentKeyValue(self, key: str, value: str):
         """Sets the environment variable value for the given key.
         Args:
-            key (str): The env variable name. 
+            key (str): The env variable name.
             value (str): The env variable value.
         """
-        self._data.env[key] = value
+        self._data.environment[key] = value
 
     def DeleteJobEnvironmentKey(self, key: str):
         """Deletes the environment variable for the given key.
         Args:
             key (str): The env variable name.
         """
-        self._data.env.pop(key, None)
+        self._data.environment.pop(key, None)
+
+    @property
+    def JobUseJobSubmissionEnvironment(self):
+        """If enabled, on submission the current user's environment
+        will be saved into the job's environment.
+        Args:
+            value (bool): The job env state.
+        Returns:
+            bool: The job env state.
+        """
+        return self._data.environmentSubmissionIncludeEnable
+
+    @JobUseJobSubmissionEnvironment.setter
+    def JobUseJobSubmissionEnvironment(self, value: bool):
+        self._data.environmentSubmissionIncludeEnable = value
+
 
     @property
     def JobUseJobEnvironmentOnly(self):
@@ -1099,11 +1291,11 @@ class Job(object):
         Returns:
             bool: The job env state.
         """
-        return self._data.useJobEnvironmentOnly
+        return self._data.environmentIsolateEnable
 
     @JobUseJobEnvironmentOnly.setter
     def JobUseJobEnvironmentOnly(self, value: bool):
-        self._data.useJobEnvironmentOnly = value
+        self._data.environmentIsolateEnable = value
 
     # Job Info
     def GetJobInfoKeys(self):
@@ -1261,7 +1453,7 @@ class Job(object):
     @JobExtraInfo6.setter
     def JobExtraInfo6(self, value: str):
         self._SetJobExtraInfoIndex(6, value)
-    
+
     @property
     def JobExtraInfo7(self):
         """One of the Job's ten Extra Info fields.
@@ -1306,12 +1498,26 @@ class Job(object):
 
     # Job Files
     @property
+    def JobPathMapping(self):
+        """The path mapping rules for this job.
+        Args:
+            pathMapping (list[PathMappingRule]): A list of path mapping rules.
+        Returns:
+            list[PathMappingRule]: A list of path mapping rules.
+        """
+        return self._data.pathMapping
+
+    @JobPathMapping.setter
+    def JobPathMapping(self, value: list[PathMappingRule]):
+        self._data.pathMapping = value
+
+    @property
     def JobOutputDirectories(self):
         """The list of output directories.
         Returns:
             list[str]: A list of directory paths.
         """
-        return self._data.outputDirectories
+        return self._data.outputDirectoryPaths
 
     @property
     def JobOutputFileNames(self):
@@ -1325,7 +1531,7 @@ class Job(object):
     def JobAuxiliarySubmissionFileNames(self):
         """The auxiliary files submitted with the job.
         Returns:
-            list[str]: Defaults to TimeSpan.MinValue
+            list[str]: A list of file paths (pre-submit)/file names (post-submit) used as auxiliary files.
         """
         return self._data.auxiliarySubmissionFileNames
 
@@ -1340,7 +1546,7 @@ class Job(object):
         Returns:
             bool: The sync state.
         """
-        return self._data.auxiliarySyncAllFiles
+        return self._data.auxiliarySubmissionSyncFileEnable
 
     @JobSynchronizeAllAuxiliaryFiles.setter
     def JobSynchronizeAllAuxiliaryFiles(self, value: bool):
@@ -1348,7 +1554,7 @@ class Job(object):
         Args:
             value (bool)
         """
-        self._data.auxiliarySyncAllFiles = value
+        self._data.auxiliarySubmissionSyncFileEnable = value
 
     # Job Limits/Groups/Pools/Machines
     @property
@@ -1373,7 +1579,7 @@ class Job(object):
         Returns:
             string:
         """
-        return self._data.secondary_pool
+        return self._data.secondaryPool
 
     @JobSecondaryPool.setter
     def JobSecondaryPool(self, value: str):
@@ -1381,7 +1587,7 @@ class Job(object):
         Args:
             value (string)
         """
-        self._data.secondary_pool = value
+        self._data.secondaryPool = value
 
     @property
     def JobGroup(self):
@@ -1707,7 +1913,6 @@ class Job(object):
     def JobOnTaskTimeout(self, value: str):
         self._data.on_task_timeout = value
 
-
     # Job Tasks
     @property
     def JobConcurrentTasks(self):
@@ -1754,7 +1959,6 @@ class Job(object):
             bool:
         """
         return self._data.override_task_extra_info_names
-
 
     @JobOverrideTaskExtraInfoNames.setter
     def JobOverrideTaskExtraInfoNames(self, value: bool):
@@ -1920,7 +2124,6 @@ class Job(object):
         """
         self._SetJobTaskExtraInfoNameIndex(9, value)
 
-
     # Job Plugin
     @property
     def JobPlugin(self):
@@ -1943,7 +2146,7 @@ class Job(object):
         Returns:
             list[str]: The value of the env var.
         """
-        return self._data.plugin_info.keys()
+        return self._data.pluginInfo.keys()
 
     def GetJobPluginInfoKeyValue(self, key: str):
         """Gets the plugin info value for the given key.
@@ -1952,15 +2155,15 @@ class Job(object):
         Returns:
             str | None: The value of the env var.
         """
-        return self._data.plugin_info.get(key, None)
-    
+        return self._data.pluginInfo.get(key, None)
+
     def SetJobPluginInfoKeyValue(self, key: str, value: str):
         """Sets the plugin info value for the given key.
         Args:
             key (str):
             value (str):
         """
-        self._data.plugin_info[key] = value
+        self._data.pluginInfo[key] = value
 
     @property
     def JobForceReloadPlugin(self):
@@ -2063,7 +2266,7 @@ class Job(object):
             value (str):
         """
         self._data.pre_task_script = value
-    
+
     @property
     def JobPostTaskScript(self):
         """The script to execute when a job task is complete.
@@ -2213,14 +2416,14 @@ class Job(object):
         Returns:
             list[str]:
         """
-        return self._data.dependency_ids
+        return self._data.dependencyJobs
 
     def SetJobDependencyIDs(self, jobIds: list[int]):
         """Sets the IDs of the jobs that this job is dependent on.
         Args:
             jobIds (list[int]): The dependant job ids.
         """
-        self._data.dependency_ids = jobIds
+        self._data.dependencyJobs = jobIds
 
     @property
     def JobRequiredAssets(self):
@@ -2230,14 +2433,14 @@ class Job(object):
         Returns:
             list[AssetDependency]:
         """
-        return self._data.required_assets
+        return self._data.dependencyAssets
 
-    def SetJobRequiredAssets(self, assets: list[Asset]):
+    def SetJobRequiredAssets(self, assets: list[AssetDependency]):
         """Sets the assets that are required in order to render this job. The assets should contain absolute paths.
         Args:
             assets (list[Asset]):
         """
-        self._data.required_assets = assets
+        self._data.dependencyAssets = assets
 
     @property
     def JobScriptDependencies(self):
@@ -2245,16 +2448,16 @@ class Job(object):
         Returns:
             list[ScriptDependency]:
         """
-        return self._data.script_dependencies
+        return self._data.dependencyScripts
 
-    def SetScriptDependencies(self, scripts: list[Script]):
+    def SetScriptDependencies(self, scripts: list[ScriptDependency]):
         """Sets the scripts that must return True in order to render this job.
         Args:
             scripts (list[Script]):
         """
-        self._data.script_dependencies = scripts
+        self._data.dependencyScripts = scripts
 
-   # Job Cleanup
+    # Job Cleanup
     @property
     def JobOverrideAutoJobCleanup(self):
         """If the job overrides the automatic job cleanup
@@ -2294,7 +2497,7 @@ class Job(object):
         Returns:
             bool:
         """
-        return self._data.override_job_cleanup 
+        return self._data.override_job_cleanup
 
     @JobOverrideJobCleanup.setter
     def JobOverrideJobCleanup(self, value: bool):
@@ -2323,7 +2526,7 @@ class Job(object):
         Returns:
             DateTime:
         """
-        return self._data.submit_date_time
+        return self._data.statsJobSubmissionDateTime
 
     @property
     def JobSubmitMachine(self):
@@ -2331,7 +2534,7 @@ class Job(object):
         Returns:
             str:
         """
-        return self._data.submit_machine
+        return self._data.statsJobSubmissionMachine
 
     @property
     def JobStartedDateTime(self):
@@ -2339,7 +2542,7 @@ class Job(object):
         Returns:
             DateTime:
         """
-        return self._data.started_date_time
+        return self._data.statsJobStartedDateTime
 
     @property
     def JobCompletedDateTime(self):
@@ -2347,7 +2550,7 @@ class Job(object):
         Returns:
             DateTime:
         """
-        return self._data.completed_date_time
+        return self._data.statsJobCompletedDateTime
 
     @property
     def JobTaskCount(self):
@@ -2357,9 +2560,9 @@ class Job(object):
         """
         # When the job is not on the farm, calculate the
         # task count.
-        if self._data.task_count == -1:
+        if self._data.statsTasksCount == -1:
             return len(self.JobFramesList)
-        return self._data.task_count
+        return self._data.statsTasksCount
 
     @property
     def JobQueuedTasks(self):
@@ -2367,7 +2570,7 @@ class Job(object):
         Returns:
             int:
         """
-        return self._data.queued_tasks
+        return self._data.statsTasksQueued
 
     @property
     def JobRenderingTasks(self):
@@ -2375,7 +2578,7 @@ class Job(object):
         Returns:
             int:
         """
-        return self._data.rendering_tasks
+        return self._data.statsTasksRendering
 
     @property
     def JobPendingTasks(self):
@@ -2383,7 +2586,7 @@ class Job(object):
         Returns:
             int:
         """
-        return self._data.pending_tasks
+        return self._data.statsTasksPending
 
     @property
     def JobCompletedTasks(self):
@@ -2391,7 +2594,7 @@ class Job(object):
         Returns:
             int:
         """
-        return self._data.completed_tasks
+        return self._data.statsTasksCompleted
 
     @property
     def JobSuspendedTasks(self):
@@ -2399,7 +2602,7 @@ class Job(object):
         Returns:
             int:
         """
-        return self._data.suspended_tasks
+        return self._data.statsTasksSuspended
 
     @property
     def JobFailedTasks(self):
@@ -2407,7 +2610,7 @@ class Job(object):
         Returns:
             int:
         """
-        return self._data.failed_tasks
+        return self._data.statsTasksFailed
 
     # Job Notifications
     @property
@@ -2631,7 +2834,6 @@ class Job(object):
         """
         return self._data.scheduled_day_monday_stop_time_span
 
-
     @JobMondayStopTime.setter
     def JobMondayStopTime(self, value: TimeSpan):
         """See getter.
@@ -2646,7 +2848,6 @@ class Job(object):
             TimeSpan:
         """
         return self._data.scheduled_day_tuesday_start_time_span
-
 
     @JobTuesdayStartTime.setter
     def JobTuesdayStartTime(self, value: TimeSpan):
@@ -2832,7 +3033,7 @@ class Job(object):
         """
         self._data.scheduled_day_sunday_stop_time_span = value
 
-    # Job Tile Rendering   
+    # Job Tile Rendering
     @property
     def JobTileJob(self):
         """If this job is a tile job.
