@@ -3,7 +3,7 @@
 This repository is still work in progress, please check back at a later time.
 
 ## Setup
-This repository should be placed in your <DeadlineRepositoryInstallRoot>/custom folder (or symlinked to be that folder).
+This repository should be placed in your \<DeadlineRepositoryInstallRoot\>/custom folder (or symlinked to be that folder).
 
 ## Features
 
