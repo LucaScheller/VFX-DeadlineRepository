@@ -20,7 +20,6 @@ def AlterCommandLine(executable, arguments, workingDirectory):
     elements = shlex.split(arguments)
     executable = elements[0]
     arguments = shlex.join(elements[1:])
-    print(arguments)
     return (executable, arguments, workingDirectory)
 
 

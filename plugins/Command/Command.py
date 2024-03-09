@@ -125,7 +125,6 @@ class CommandPlugin(DeadlinePlugin):
         overallProgress = (completedFrameProgress + currentFrameProgress) / float(frameCount)
         self.SetProgress(overallProgress)
         self.SetStatusMessage( "Progress: " + str(overallProgress) + " %" )
-                
 
         overallProgress = float(self.GetRegexMatch(1))
         self.SetProgress(overallProgress)
