@@ -16,10 +16,11 @@ def AlterCommandLine(executable, arguments, workingDirectory):
         workingDirectory (str): The working directory
     """
 
-    deadlinePlugin_accessor.LogInfo("Run Command: '{}'".format(arguments))
+    deadlinePlugin_accessor.LogInfo("Run Command: {}".format(arguments))
     elements = shlex.split(arguments)
     executable = elements[0]
     arguments = shlex.join(elements[1:])
+    print(arguments)
     return (executable, arguments, workingDirectory)
 
 

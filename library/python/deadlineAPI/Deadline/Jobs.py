@@ -6,7 +6,10 @@ import enum
 import getpass
 import os
 import re
+import logging
 from dataclasses import dataclass
+
+LOG = logging.getLogger(__name__)
 
 #########################################
 # Deadline Scripting API
@@ -58,22 +61,28 @@ class JobScheduledType(enum.Enum):
 
 
 @dataclass
-class AssetDependency:
-    FileName: str
+class BaseDependency:
     Notes: str
     IgnoreFrameOffsets: bool
-    IsFrameAware: bool
-    FrameString: str
+
+
+@dataclass
+class OffsetDependency(BaseDependency):
     OverrideFrameOffsets: bool
     StartOffset: int
     EndOffset: int
 
 
 @dataclass
-class ScriptDependency:
+class AssetDependency(OffsetDependency):
     FileName: str
-    Notes: str
-    IgnoreFrameOffsets: bool
+    IsFrameAware: bool
+    FrameString: str
+
+
+@dataclass
+class ScriptDependency(OffsetDependency):
+    FileName: str
 
 
 @dataclass
@@ -1075,18 +1084,22 @@ class Job(object):
         jobData["IsFrameDependent"] = self._data.dependencyFrameEnabled
         jobData["FrameDependencyOffsetStart"] = self._data.dependencyFrameOffsetStart
         jobData["FrameDependencyOffsetEnd"] = self._data.dependencyFrameOffsetEnd
-        jobData["JobDependencies"] = ",".join(self._data.dependencyJobs)
-        jobData["RequiredAssets"] = self._data.dependencyAssets
-        jobData["ScriptDependencies"] = ",".join(
-            [script.FileName for script in self._data.dependencyScripts]
-        )
+        if self._data.dependencyJobs:
+            jobData["JobDependencies"] = ",".join(self._data.dependencyJobs)
+        if self._data.dependencyAssets:
+            jobData["RequiredAssets"] = self._data.dependencyAssets
+        if self._data.dependencyScripts:
+            jobData["ScriptDependencies"] = ",".join(
+                [script.FileName for script in self._data.dependencyScripts]
+            )
         # Job Cleanup
         jobData["OverrideAutoJobCleanup"] = self._data.cleanupAutomaticOverrideEnable
         jobData["OverrideJobCleanupType"] = self._data.cleanupAutomaticType.name
         jobData["OverrideJobCleanup"] = self._data.cleanupOverrideEnable
         jobData["JobCleanupDays"] = self._data.cleanupOverrideDays
         # Job Stats
-        jobData["MachineName"] = self._data.statsJobSubmissionMachine
+        if self._data.statsJobSubmissionMachine:
+            jobData["MachineName"] = self._data.statsJobSubmissionMachine
         # Job Notifications
         jobData["OverrideNotificationMethod"] = (
             self._data.notificationMethodOverrideEnable
@@ -1320,6 +1333,8 @@ class Job(object):
 
     @JobPriority.setter
     def JobPriority(self, value: int):
+        if value > 100:
+            LOG.warning("Clamping job priority to the allowed max of 100")
         self._data.priority = value
 
     @property
