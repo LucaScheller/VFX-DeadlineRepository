@@ -316,11 +316,18 @@ class FrameList:
 #########################################
 
 
-def jobPermissionWrite(func):
+def jobPermissionSubmit(func):
     def wrapper_method(*args, **kwargs):
         cls_self = args[0]
         if cls_self.JobId is not None:
             raise Exception("'{}' can only be edited pre-submit.".format(func.__name__))
+        func(*args, **kwargs)
+    return wrapper_method
+
+
+def jobPermissionRead(func):
+    def wrapper_method(*args, **kwargs):
+        raise Exception("'{}' can only be edited pre-submit.".format(func.__name__))
         func(*args, **kwargs)
     return wrapper_method
 
@@ -411,7 +418,7 @@ class JobInternalData(dict):
         self.statusFailureDetectionTaskErrors = 0
         self.statusFailureDetectionMachineBadIgnore = False
         self.statusInterruptable = False
-        self.statusInterruptablePercentage = 100
+        self.statusInterruptablePercentage = 1
         self.statusInterruptableRemainingTimeThreshold = 0
         self.statusTimeoutJobMinSeconds = 0
         self.statusTimeoutPluginInitializeMaxSeconds = 0
@@ -1223,15 +1230,31 @@ class Job(object):
     # additional setters have been added.
     # Differences:
     #   JobRepository -> Added Property
-    #   JobFramesPerTask -> Added Setter
-    #   JobStatus -> Signature Enum JobStatus
-    #             -> Added Property Setter
-    #   JobOnJobComplete -> Signature Enum JobCompleteAction
+    #   JobFrames -> Add property setter
+    #   JobFramesList -> Add property setter
+    #   JobFramesPerTask -> Add property setter
     #   JobPathMapping -> Added Property
-    #   JobAuxiliarySubmissionFileNames -> Added Property Setter
-    #   JobSubmitMachine -> Added Setter
-    #   JobTileJob -> Added Setter
-    #   JobOutputTileFileNames -> Added Setter
+    #   JobOutputDirectories -> Add property setter
+    #   JobOutputFileNames -> Add property setter
+    #   JobAuxiliarySubmissionFileNames -> Add property setter
+    #   JobMachineLimit -> Add property setter
+    #   JobMachineLimitProgress -> Add property setter
+    #   JobWhitelistFlag -> Add property setter
+    #   JobListedSlaves -> Add property setter
+    #   JobStatus -> Signature Enum JobStatus
+    #             -> Add property setter
+    #   JobOnJobComplete -> Signature Enum JobCompleteAction
+    #   JobOnTaskTimeout -> Signature Enum TaskOnTimeout
+    #   JobSubmitMachine -> Add property setter
+    #   JobPreJobScript -> Add property setter 
+    #                   -> Adjust doc string
+    #   JobPostJobScript -> Add property setter 
+    #                    -> Adjust doc string
+    #   JobMaintenanceJob -> Add property setter 
+    #   JobMaintenanceJobStartFrame -> Add property setter 
+    #   JobMaintenanceJobEndFrame -> Add property setter 
+    #   JobTileJob -> Add property setter
+    #   JobOutputTileFileNames -> Add property setter
     #########################################
 
     # Job General
@@ -1360,10 +1383,17 @@ class Job(object):
     @property
     def JobFrames(self):
         """The job's frame list as a string.
+        Args:
+            value (str): The frame list string. 
         Returns:
             str: The frame list string.
         """
         return FrameList.convertFrameListToFrameString(self._data.frames)
+
+    @JobFrames.setter
+    @jobPermissionSubmit
+    def JobFrames(self, value: str):
+        self._data.frames = FrameList.convertFrameStringToFrameList(value)
 
     @property
     def JobFramesList(self):
@@ -1376,6 +1406,7 @@ class Job(object):
         return self._data.frames
 
     @JobFramesList.setter
+    @jobPermissionSubmit
     def JobFramesList(self, value):
         self._data.frames = value
 
@@ -1390,7 +1421,7 @@ class Job(object):
         return self._data.framesPerTask
 
     @JobFramesPerTask.setter
-    @jobPermissionWrite
+    @jobPermissionSubmit
     def JobFramesPerTask(self, value):
         self._data.framesPerTask = value
 
@@ -1689,22 +1720,38 @@ class Job(object):
     @property
     def JobOutputDirectories(self):
         """The list of output directories.
+        Args:
+            value (list[str]): A list of directory paths.
         Returns:
             list[str]: A list of directory paths.
         """
         return self._data.fileOutputDirectoryPaths
 
+    @JobOutputDirectories.setter
+    @jobPermissionSubmit
+    def JobOutputDirectories(self, value):
+        self._data.fileOutputDirectoryPaths = value
+
     @property
     def JobOutputFileNames(self):
         """The list of output filenames.
+        Args:
+            value (list[str]): A list of file names.
         Returns:
             list[str]: A list of file names.
         """
         return self._data.fileOutputFileNames
 
+    @JobOutputFileNames.setter
+    @jobPermissionSubmit
+    def JobOutputFileNames(self, value):
+        self._data.fileOutputFileNames = value
+
     @property
     def JobAuxiliarySubmissionFileNames(self):
         """The auxiliary files submitted with the job.
+        Args:
+            value (list[str]): A list of file paths used as auxiliary files.
         Returns:
             list[str]: A list of file paths (pre-submit)/file names (post-submit) used as auxiliary files.
         """
@@ -1718,6 +1765,8 @@ class Job(object):
     def JobSynchronizeAllAuxiliaryFiles(self):
         """If the job's auxiliary files should be
         synced up by the Worker between tasks.
+        Args:
+            value (bool): The sync state.
         Returns:
             bool: The sync state.
         """
@@ -1725,10 +1774,6 @@ class Job(object):
 
     @JobSynchronizeAllAuxiliaryFiles.setter
     def JobSynchronizeAllAuxiliaryFiles(self, value: bool):
-        """See getter.
-        Args:
-            value (bool)
-        """
         self._data.fileAuxiliarySubmissionSyncFileEnable = value
 
     # Job Limits/Groups/Pools/Machines
@@ -1750,87 +1795,106 @@ class Job(object):
     @property
     def JobPool(self):
         """The job's pool.
+        Args:
+            value (str): The pool name.
         Returns:
-            str:
+            str: The pool name.
         """
         return self._data.machinePool
 
     @JobPool.setter
     def JobPool(self, value: str):
-        """See getter.
-        Args:
-            value (str)
-        """
         self._data.machinePool = value
 
     @property
     def JobSecondaryPool(self):
-        """The Secondary Pool in which this Job belongs.
+        """The Secondary Pool in which this job belongs.
+        Args:
+            value (str): The secondary pool name.
         Returns:
-            string:
+            str: The secondary pool name.
         """
         return self._data.machineSecondaryPool
 
     @JobSecondaryPool.setter
     def JobSecondaryPool(self, value: str):
-        """See getter.
-        Args:
-            value (string)
-        """
         self._data.machineSecondaryPool = value
 
     @property
     def JobGroup(self):
         """The job's group.
+        Args:
+            value (str): The group name.
         Returns:
-            str:
+            str: The group name.
         """
         return self._data.machineGroup
 
     @JobGroup.setter
     def JobGroup(self, value: str):
-        """See getter.
-        Args:
-            value (str)
-        """
         self._data.machineGroup = value
 
     @property
     def JobMachineLimit(self):
         """The machine limit for the job.
+        Args:
+            value (int): The machine limit.
         Returns:
-            int:
+            int: The machine limit.
         """
         return self._data.machineLimit
+
+    @JobMachineLimit.setter
+    def JobMachineLimit(self, value):
+        self._data.machineLimit = value
 
     @property
     def JobMachineLimitProgress(self):
         """When the Worker reaches this progress for
         the job's task, it will release the limit group.
+        Args:
+            value (float): The progress percentage.
         Returns:
-            double:
+            float: The progress percentage.
         """
         return self._data.machineLimitProgress
+
+    @JobMachineLimitProgress.setter
+    def JobMachineLimitProgress(self, value):
+        self._data.machineLimitProgress = value
 
     @property
     def JobWhitelistFlag(self):
         """If the job's listed Workers are an allow
         list or a deny list.
+        Args:
+            value (bool): The list mode state.
         Returns:
-            bool:
+            bool: The list mode state.
         """
         return self._data.machineListedInclude
+
+
+    @JobWhitelistFlag.setter
+    def JobWhitelistFlag(self, value):
+        self._data.machineListedInclude = value
+
 
     @property
     def JobListedSlaves(self):
         """The list of Workers in allow or deny list for
         the job. Use JobWhitelistFlag to determine if the
         list is a deny list or an allow list.
-
+        Args:
+            value (list[str]): The machine names to white/black list.
         Returns:
-            list[str]:
+            list[str]: The machine names to white/black list.
         """
         return self._data.machineListedNames
+
+    @JobListedSlaves.setter
+    def JobListedSlaves(self, value):
+        self._data.machineListedNames = value
 
     @property
     def JobConcurrentTasks(self):
@@ -1867,8 +1931,10 @@ class Job(object):
     @property
     def JobStatus(self):
         """The job's current state.
+        Args:
+            value (JobStatus): The job state.
         Returns:
-            str:
+            JobStatus: The job state.
         """
         return self._data.status
 
@@ -1881,9 +1947,9 @@ class Job(object):
         """If the job should send warning notifications when it
         reaches a certain number of errors.
         Args:
-            value (bool)
+            value (bool): The notification enable state.
         Returns:
-            bool:
+            bool: The notification enable state.
         """
         return self._data.statusErrorWarningSend
 
@@ -1896,9 +1962,9 @@ class Job(object):
         """Whether or not this job overrides the Job
         Failure Detection settings in the Repository Options.
         Args:
-            value (bool)
+            value (bool): The override state.
         Returns:
-            bool:
+            bool: The override state.
         """
         return self._data.statusFailureDetectionJobOverrideEnable
 
@@ -1912,9 +1978,9 @@ class Job(object):
         this is the number of errors it takes to trigger
         a job failure.
         Args:
-            value (int)
+            value (int): The error max count.
         Returns:
-            int:
+            int: The error max count.
         """
         return self._data.statusFailureDetectionJobErrors
 
@@ -1927,9 +1993,9 @@ class Job(object):
         """Whether or not this job overrides the Task Failure
         Detection settings in the Repository Options.
         Args:
-            value (bool)
+            value (bool): The override state.
         Returns:
-            bool:
+            bool: The override state.
         """
         return self._data.statusFailureDetectionTaskOverrideEnable
 
@@ -1943,9 +2009,9 @@ class Job(object):
         this is the number of errors it takes to trigger
         a task failure.
         Args:
-            value (int)
+            value (int): The error max count.
         Returns:
-            int:
+            int: The error max count.
         """
         return self._data.statusFailureDetectionTaskErrors
 
@@ -1957,9 +2023,9 @@ class Job(object):
     def JobIgnoreBadSlaveDetection(self):
         """Whether or not this job overrides the Bad Worker Detection settings in the Repository Options.
         Args:
-            value (bool)
+            value (bool): The ignore state.
         Returns:
-            bool:
+            bool: The ignore state.
         """
         return self._data.statusFailureDetectionMachineBadIgnore
 
@@ -1972,9 +2038,9 @@ class Job(object):
         """If the job is interruptible, which causes it
         to be canceled when a job with higher priority comes along.
         Args:
-            value (bool)
+            value (bool): The interruptible state.
         Returns:
-            bool:
+            bool: The interruptible state.
         """
         return self._data.statusInterruptable
 
@@ -1987,9 +2053,9 @@ class Job(object):
         """The completion percentage that this Job must
         be less than in order to be interruptible.
         Args:
-            value (int)
+            value (int): The interruptible max percentage.
         Returns:
-            int:
+            int: The interruptible max percentage.
         """
         return self._data.statusInterruptablePercentage
 
@@ -2001,26 +2067,24 @@ class Job(object):
     def RemTimeThreshold(self):
         """The remaining time (in seconds) that this Job
         must have left more than in order to be interruptable.
+        Args:
+            value (int): The remaining time in seconds.
         Returns:
-            int:
+            int: The remaining time in seconds.
         """
         return self._data.statusInterruptableRemainingTimeThreshold
 
     @RemTimeThreshold.setter
     def RemTimeThreshold(self, value: int):
-        """See getter.
-        Args:
-            value (int)
-        """
         self._data.statusInterruptableRemainingTimeThreshold = value
 
     @property
     def JobStartJobTimeoutSeconds(self):
         """The timespan a job's task has to start before a timeout occurs.
         Args:
-            value (int)
+            value (int): The job's min task timeout in seconds.
         Returns:
-            int:
+            int: The job's min timeout in seconds.
         """
         return self._data.statusTimeoutJobMinSeconds
 
@@ -2032,9 +2096,9 @@ class Job(object):
     def JobInitializePluginTimeoutSeconds(self):
         """The timespan a job's task has to start before a timeout occurs.
         Args:
-            value (int)
+            value (int): The job's min plugin timeout in seconds.
         Returns:
-            int:
+            int: The job's min plugin timeout in seconds.
         """
         return self._data.statusTimeoutPluginInitializeMaxSeconds
 
@@ -2047,9 +2111,9 @@ class Job(object):
         """The minimum number of seconds a job must run
         to be considered successful.
         Args:
-            value (int)
+            value (int): The job's min task timeout in seconds.
         Returns:
-            int:
+            int: The job's min task timeout in seconds.
         """
         return self._data.statusTimeoutTaskMinSeconds
 
@@ -2061,8 +2125,10 @@ class Job(object):
     def JobTaskTimeoutSeconds(self):
         """The timespan a job's task has to render before
         a timeout occurs.
+        Args:
+            value (int): The job's min task timeout in seconds.
         Returns:
-            int:
+            int: The job's min task timeout in seconds.
         """
         return self._data.statusTimeoutTaskMaxSeconds
 
@@ -2074,9 +2140,9 @@ class Job(object):
     def JobEnableTimeoutsForScriptTasks(self):
         """If the timeouts should apply to pre/post job script tasks.
         Args:
-            value (bool)
+            value (bool): The job's min script timeout in seconds.
         Returns:
-            bool:
+            bool: The job's min script timeout in seconds.
         """
         return self._data.statusTimeoutScriptEnable
 
@@ -2092,9 +2158,9 @@ class Job(object):
         so this option should only be used if the frames for the job have
         consistent render times.
         Args:
-            value (bool)
+            value (bool): The auto timeout state.
         Returns:
-            bool:
+            bool: The auto timeout state.
         """
         return self._data.statusTimeoutAutoEnable
 
@@ -2106,9 +2172,9 @@ class Job(object):
     def JobEnableFrameTimeouts(self):
         """If the timeouts are Frame based instead of Task based.
         Args:
-            value (bool)
+            value (bool): The frame-based timeout enable state.
         Returns:
-            bool:
+            bool: The frame-based timeout enable state.
         """
         return self._data.statusTimeoutFrameBasedEnable
 
@@ -2121,9 +2187,9 @@ class Job(object):
         """What the job should do when it completes.
         The options are "Archive", "Delete", or "Nothing".
         Args:
-            value (str): "Archive", "Delete", or "Nothing".
+            value (JobCompleteAction): See enum for possible values.
         Returns:
-            str: The action name.
+            JobCompleteAction: The enum value.
         """
         return self._data.onJobComplete
 
@@ -2136,14 +2202,14 @@ class Job(object):
         """What to do when a task times out.
         The options are "Error", "Notify", or "Both".
         Args:
-            value (str)
+            value (TaskOnTimeout): See enum for possible values.
         Returns:
-            str:
+            TaskOnTimeout: The enum value.
         """
         return self._data.onTaskTimeout
 
     @JobOnTaskTimeout.setter
-    def JobOnTaskTimeout(self, value: str):
+    def JobOnTaskTimeout(self, value: TaskOnTimeout):
         self._data.onTaskTimeout = value
 
     # Job Tasks
@@ -2151,9 +2217,9 @@ class Job(object):
     def JobOverrideTaskExtraInfoNames(self):
         """Whether this job overrides the task extra info names.
         Args:
-            value (bool)
+            value (bool): The override state.
         Returns:
-            bool:
+            bool: The override state.
         """
         return self._data.taskInfoExtraNameOverrideEnable
 
@@ -2164,178 +2230,156 @@ class Job(object):
     @property
     def JobTaskExtraInfoName0(self):
         """One of the Task's ten Extra Info names.
+        Args:
+            value (str): The extra info name.
         Returns:
-            str:
+            str: The extra info name.
         """
         return self._GetJobTaskExtraInfoNameIndex(0)
 
     @JobTaskExtraInfoName0.setter
     def JobTaskExtraInfoName0(self, value: str):
-        """See getter.
-        Args:
-            value (str)
-        """
         self._SetJobTaskExtraInfoNameIndex(0, value)
 
     @property
     def JobTaskExtraInfoName1(self):
         """One of the Task's ten Extra Info names.
+        Args:
+            value (str): The extra info name.
         Returns:
-            str:
+            str: The extra info name.
         """
         return self._GetJobTaskExtraInfoNameIndex(1)
 
     @JobTaskExtraInfoName1.setter
     def JobTaskExtraInfoName1(self, value: str):
-        """See getter.
-        Args:
-            value (str)
-        """
         self._SetJobTaskExtraInfoNameIndex(1, value)
 
     @property
     def JobTaskExtraInfoName2(self):
         """One of the Task's ten Extra Info names.
+        Args:
+            value (str): The extra info name.
         Returns:
-            str:
+            str: The extra info name.
         """
         return self._GetJobTaskExtraInfoNameIndex(2)
 
     @JobTaskExtraInfoName2.setter
     def JobTaskExtraInfoName2(self, value: str):
-        """See getter.
-        Args:
-            value (str)
-        """
         self._SetJobTaskExtraInfoNameIndex(2, value)
 
     @property
     def JobTaskExtraInfoName3(self):
         """One of the Task's ten Extra Info names.
+        Args:
+            value (str): The extra info name.
         Returns:
-            str:
+            str: The extra info name.
         """
         return self._GetJobTaskExtraInfoNameIndex(3)
 
     @JobTaskExtraInfoName3.setter
     def JobTaskExtraInfoName3(self, value: str):
-        """See getter.
-        Args:
-            value (str)
-        """
         self._SetJobTaskExtraInfoNameIndex(3, value)
 
     @property
     def JobTaskExtraInfoName4(self):
         """One of the Task's ten Extra Info names.
+        Args:
+            value (str): The extra info name.
         Returns:
-            str:
+            str: The extra info name.
         """
         return self._GetJobTaskExtraInfoNameIndex(4)
 
     @JobTaskExtraInfoName4.setter
     def JobTaskExtraInfoName4(self, value: str):
-        """See getter.
-        Args:
-            value (str)
-        """
         self._SetJobTaskExtraInfoNameIndex(4, value)
 
     @property
     def JobTaskExtraInfoName5(self):
         """One of the Task's ten Extra Info names.
+        Args:
+            value (str): The extra info name.
         Returns:
-            str:
+            str: The extra info name.
         """
         return self._GetJobTaskExtraInfoNameIndex(5)
 
     @JobTaskExtraInfoName5.setter
     def JobTaskExtraInfoName5(self, value: str):
-        """See getter.
-        Args:
-            value (str)
-        """
         self._SetJobTaskExtraInfoNameIndex(5, value)
 
     @property
     def JobTaskExtraInfoName6(self):
         """One of the Task's ten Extra Info names.
+        Args:
+            value (str): The extra info name.
         Returns:
-            str:
+            str: The extra info name.
         """
         return self._GetJobTaskExtraInfoNameIndex(6)
 
     @JobTaskExtraInfoName6.setter
     def JobTaskExtraInfoName6(self, value: str):
-        """See getter.
-        Args:
-            value (str)
-        """
         self._SetJobTaskExtraInfoNameIndex(6, value)
 
     @property
     def JobTaskExtraInfoName7(self):
         """One of the Task's ten Extra Info names.
+        Args:
+            value (str): The extra info name.
         Returns:
-            str:
+            str: The extra info name.
         """
         return self._GetJobTaskExtraInfoNameIndex(7)
 
     @JobTaskExtraInfoName7.setter
     def JobTaskExtraInfoName7(self, value: str):
-        """See getter.
-        Args:
-            value (str)
-        """
         self._SetJobTaskExtraInfoNameIndex(7, value)
 
     @property
     def JobTaskExtraInfoName8(self):
         """One of the Task's ten Extra Info names.
+        Args:
+            value (str): The extra info name.
         Returns:
-            str:
+            str: The extra info name.
         """
         return self._GetJobTaskExtraInfoNameIndex(8)
 
     @JobTaskExtraInfoName8.setter
     def JobTaskExtraInfoName8(self, value: str):
-        """See getter.
-        Args:
-            value (str)
-        """
         self._SetJobTaskExtraInfoNameIndex(8, value)
 
     @property
     def JobTaskExtraInfoName9(self):
         """One of the Task's ten Extra Info names.
+        Args:
+            value (str): The extra info name.
         Returns:
-            str:
+            str: The extra info name.
         """
         return self._GetJobTaskExtraInfoNameIndex(9)
 
     @JobTaskExtraInfoName9.setter
     def JobTaskExtraInfoName9(self, value: str):
-        """See getter.
-        Args:
-            value (str)
-        """
         self._SetJobTaskExtraInfoNameIndex(9, value)
 
     # Job Plugin
     @property
     def JobPlugin(self):
         """The name of the Deadline plugin the job uses.
+        Args:
+            value (str): The plugin name.
         Returns:
-            str:
+            str: The plugin name.
         """
         return self._data.plugin
 
     @JobPlugin.setter
     def JobPlugin(self, value: str):
-        """See getter.
-        Args:
-            value (str)
-        """
         self._data.plugin = value
 
     def GetJobPluginInfoKeys(self):
@@ -2366,238 +2410,223 @@ class Job(object):
     def JobForceReloadPlugin(self):
         """Whether or not the job's plugin should be
         reloaded between tasks.
+        Args:
+            value (bool): The force reload state.
         Returns:
-            bool:
+            bool: The force reload state.
         """
         return self._data.pluginForceReload
 
     @JobForceReloadPlugin.setter
     def JobForceReloadPlugin(self, value: bool):
-        """See getter.
-        Args:
-            value (bool)
-        """
         self._data.pluginForceReload = value
 
     @property
     def JobCustomPluginDirectory(self):
         """A custom location to load the job's plugin from.
+        Args:
+            value (str): The custom plugin directory path.
         Returns:
-            str:
+            str: The custom plugin directory path.
         """
         return self._data.pluginDirectoryCustom
 
     @JobCustomPluginDirectory.setter
     def JobCustomPluginDirectory(self, value: str):
-        """A custom location to load the job's plugin from.
-        Args:
-            value (str)
-        """
         self._data.pluginDirectoryCustom = value
 
     # Job Event Plugins
     @property
     def JobSuppressEvents(self):
         """Whether or not this Job should suppress Events plugins.
+        Args:
+            value (bool): The suppress state.
         Returns:
-            bool:
+            bool: The suppress state.
         """
         return self._data.eventSuppress
 
     @JobSuppressEvents.setter
     def JobSuppressEvents(self, value: bool):
-        """See getter.
-        Args:
-            value (bool)
-        """
         self._data.eventSuppress = value
 
     @property
     def JobCustomEventPluginDirectory(self):
         """A custom location to load the job's event plugin from.
+        Args:
+            value (str): The custom event plugin directory path.
         Returns:
-            str:
+            str: The custom event plugin directory path.
         """
         return self._data.eventDirectoryCustom
 
     @JobCustomEventPluginDirectory.setter
     def JobCustomEventPluginDirectory(self, value: str):
-        """A custom location to load the job's event plugin from.
-        Args:
-            value (str)
-        """
         self._data.eventDirectoryCustom = value
 
     # Job Pre/Post (Task) Scripts
     @property
     def JobPreJobScript(self):
-        """The script to execute before the job starts. Read Only.
-        Use RepositoryUtils.SetPreJobScript and RepositoryUtils.DeletePreJobScript.
+        """The script to execute before the job starts.
+        > Originals docs: Read Only. Use RepositoryUtils.SetPreJobScript and RepositoryUtils.DeletePreJobScript.
+        Args:
+            value (str): The job pre script file path.
         Returns:
-            str:
+            str: The job pre script file path.
         """
         return self._data.scriptPreJob
 
+    @JobPreJobScript.setter
+    def JobPreJobScript(self, value):
+        self._data.scriptPreJob = value
+
     @property
     def JobPostJobScript(self):
-        """The script to execute after the Job finishes. Read Only.
-        Use RepositoryUtils.SetPostJobScript and RepositoryUtils.DeletePostJobScript.
-
+        """The script to execute after the Job finishes. 
+        > Originals docs: Read Only. Use RepositoryUtils.SetPostJobScript and RepositoryUtils.DeletePostJobScript.
+        Args:
+            value (str): The job post script file path.
         Returns:
-            string:
+            str: The job post script file path.
         """
         return self._data.scriptPostJob
+
+    @JobPostJobScript.setter
+    def JobPostJobScript(self, value):
+        self._data.scriptPostJob = value
 
     @property
     def JobPreTaskScript(self):
         """The script to execute before a job task starts.
+        Args:
+            value (str): The task pre script file path.
         Returns:
-            str:
+            str: The task pre script file path.
         """
         return self._data.scriptPreTask
 
     @JobPreTaskScript.setter
     def JobPreTaskScript(self, value: str):
-        """The script to execute before a job task starts.
-        Args:
-            value (str):
-        """
         self._data.scriptPreTask = value
 
     @property
     def JobPostTaskScript(self):
         """The script to execute when a job task is complete.
+        Args:
+            value (str): The task post script file path.
         Returns:
-            str:
+            str: The task post script file path.
         """
         return self._data.scriptPostTask
 
     @JobPostTaskScript.setter
     def JobPostTaskScript(self, value: str):
-        """See getter.
-        Args:
-            value (str)
-        """
         self._data.scriptPostTask = value
 
     # Job Dependencies
     @property
     def JobResumeOnCompleteDependencies(self):
         """If the job should resume on complete dependencies.
+        Args:
+            value (bool): The resume state.
         Returns:
-            bool:
+            bool: The resume state.
         """
         return self._data.dependencyResumeOnCompleted
 
     @JobResumeOnCompleteDependencies.setter
     def JobResumeOnCompleteDependencies(self, value: bool):
-        """See getter.
-        Args:
-            value (bool)
-        """
         self._data.dependencyResumeOnCompleted = value
 
     @property
     def JobResumeOnDeletedDependencies(self):
         """If the job should resume on deleted dependencies.
+        Args:
+            value (bool): The resume state.
         Returns:
-            bool:
+            bool: The resume state.
         """
         return self._data.dependencyResumeOnDeleted
 
     @JobResumeOnDeletedDependencies.setter
     def JobResumeOnDeletedDependencies(self, value: bool):
-        """See getter.
-        Args:
-            value (bool)
-        """
         self._data.dependencyResumeOnDeleted = value
 
     @property
     def JobResumeOnFailedDependencies(self):
         """If the job should resume on failed dependencies.
+        Args:
+            value (bool): The resume state.
         Returns:
-            bool:
+            bool: The resume state.
         """
         return self._data.dependencyResumeOnFailed
 
     @JobResumeOnFailedDependencies.setter
     def JobResumeOnFailedDependencies(self, value: bool):
-        """See getter.
-        Args:
-            value (bool)
-        """
         self._data.dependencyResumeOnFailed = value
 
     @property
     def JobDependencyPercentageValue(self):
         """This job will resume when its dependencies have completed this percentage of their tasks.
+        Args:
+            value (float): The percentage when dependencies can already resume.
         Returns:
-            float:
+            float: The percentage when dependencies can already resume.
         """
         return self._data.dependencyResumePendingPercentageValue
 
     @JobDependencyPercentageValue.setter
     def JobDependencyPercentageValue(self, value: float):
-        """This job will resume when its dependencies have completed this percentage of their tasks.
-        Args:
-            value (float)
-        """
         self._data.dependencyResumePendingPercentageValue = value
 
     @property
     def JobIsFrameDependent(self):
         """If the job is frame dependent.
+        Args:
+            value (bool): The frame dependent state.
         Returns:
-            bool:
+            bool: The frame dependent state.
         """
         return self._data.dependencyFrameEnabled
 
     @JobIsFrameDependent.setter
     def JobIsFrameDependent(self, value: bool):
-        """See getter.
-        Args:
-            value (bool)
-        """
         self._data.dependencyFrameEnabled = value
 
     @property
     def JobFrameDependencyOffsetStart(self):
-        """The start offset for frame depenencies.
+        """The start offset for frame dependencies.
+        Args:
+            value (int): The start offset.
         Returns:
-            int:
+            int: The start offset.
         """
         return self._data.dependencyFrameOffsetStart
 
     @JobFrameDependencyOffsetStart.setter
     def JobFrameDependencyOffsetStart(self, value: int):
-        """See getter.
-        Args:
-            value (int)
-        """
         self._data.dependencyFrameOffsetStart = value
 
     @property
     def JobFrameDependencyOffsetEnd(self):
         """The end offset for frame depenencies.
+        Args:
+            value (int): The end offset.
         Returns:
-            int:
+            int: The end offset.
         """
         return self._data.dependencyFrameOffsetEnd
 
     @JobFrameDependencyOffsetEnd.setter
     def JobFrameDependencyOffsetEnd(self, value: int):
-        """See getter.
-        Args:
-            value (int)
-        """
         self._data.dependencyFrameOffsetEnd = value
 
     @property
     def JobDependencyIDs(self):
         """The ids of the jobs that this job is dependent on.
         Returns:
-            list[str]:
+            list[str]: The dependant job ids.
         """
         return self._data.dependencyJobs
 
@@ -2612,16 +2641,15 @@ class Job(object):
     def JobRequiredAssets(self):
         """The assets that are required in order to render this job.
         The assets should contain absolute paths. More...
-
         Returns:
-            list[AssetDependency]:
+            list[AssetDependency]: The asset dependencies.
         """
         return self._data.dependencyAssets
 
     def SetJobRequiredAssets(self, assets: list[AssetDependency]):
         """Sets the assets that are required in order to render this job. The assets should contain absolute paths.
         Args:
-            assets (list[Asset]):
+            assets (list[Asset]): The asset dependencies.
         """
         self._data.dependencyAssets = assets
 
@@ -2629,14 +2657,14 @@ class Job(object):
     def JobScriptDependencies(self):
         """The scripts that must return True in order to render this job.
         Returns:
-            list[ScriptDependency]:
+            list[ScriptDependency]: The script dependencies.
         """
         return self._data.dependencyScripts
 
     def SetScriptDependencies(self, scripts: list[ScriptDependency]):
         """Sets the scripts that must return True in order to render this job.
         Args:
-            scripts (list[Script]):
+            scripts (list[Script]): The script dependencies.
         """
         self._data.dependencyScripts = scripts
 
@@ -2646,9 +2674,9 @@ class Job(object):
         """If the job overrides the automatic job cleanup
         in the Repository Options.
         Args:
-            value (bool)
+            value (bool): The override state.
         Returns:
-            bool:
+            bool: The override state.
         """
         return self._data.cleanupAutomaticOverrideEnable
 
@@ -2661,14 +2689,14 @@ class Job(object):
         """The job cleanup mode. Only relevant if
         the override is set.
         Args:
-            value (str)
+            value (AutoJobCleanupType): See enum for possible values.
         Returns:
-            str:
+            AutoJobCleanupType: The enum value.
         """
         return self._data.cleanupAutomaticType
 
     @AutoJobCleanupType.setter
-    def AutoJobCleanupType(self, value: str):
+    def AutoJobCleanupType(self, value: AutoJobCleanupType):
         self._data.cleanupAutomaticType = value
 
     @property
@@ -2676,9 +2704,9 @@ class Job(object):
         """If the job overrides the amount of days
         before its cleaned up.
         Args:
-            value (bool)
+            value (bool): The override state.
         Returns:
-            bool:
+            bool: The override state.
         """
         return self._data.cleanupOverrideEnable
 
@@ -2692,9 +2720,9 @@ class Job(object):
         cleaned up after it is completed. Only relevant
         if the override is set.
         Args:
-            value (int)
+            value (int): The amount of days.
         Returns:
-            int:
+            int: The amount of days.
         """
         return self._data.cleanupOverrideDays
 
@@ -2721,7 +2749,7 @@ class Job(object):
     def JobSubmitDateTime(self):
         """The date/time at which the job was submitted.
         Returns:
-            DateTime:
+            DateTime: The submit date time.
         """
         return self._data.statsJobSubmissionDateTime
 
@@ -2729,7 +2757,7 @@ class Job(object):
     def JobStartedDateTime(self):
         """The date/time at which the job started rendering.
         Returns:
-            DateTime:
+            DateTime: The start date time.
         """
         return self._data.statsJobStartedDateTime
 
@@ -2737,7 +2765,7 @@ class Job(object):
     def JobCompletedDateTime(self):
         """The date/time at which the job finished rendering.
         Returns:
-            DateTime:
+            DateTime: The end date time.
         """
         return self._data.statsJobCompletedDateTime
 
@@ -2745,7 +2773,7 @@ class Job(object):
     def JobTaskCount(self):
         """The number of tasks the job has.
         Returns:
-            int:
+            int: The task count.
         """
         # When the job is not on the farm, calculate the
         # task count.
@@ -2757,7 +2785,7 @@ class Job(object):
     def JobQueuedTasks(self):
         """The number of tasks in the queued state.
         Returns:
-            int:
+            int: The queued task count.
         """
         return self._data.statsTasksQueued
 
@@ -2765,7 +2793,7 @@ class Job(object):
     def JobRenderingTasks(self):
         """The number of tasks in the active state.
         Returns:
-            int:
+            int: The active task count.
         """
         return self._data.statsTasksRendering
 
@@ -2773,7 +2801,7 @@ class Job(object):
     def JobPendingTasks(self):
         """The number of tasks in the pending state.
         Returns:
-            int:
+            int: The pending task count.
         """
         return self._data.statsTasksPending
 
@@ -2781,7 +2809,7 @@ class Job(object):
     def JobCompletedTasks(self):
         """The number of tasks in the completed state.
         Returns:
-            int:
+            int: The completed task count.
         """
         return self._data.statsTasksCompleted
 
@@ -2789,7 +2817,7 @@ class Job(object):
     def JobSuspendedTasks(self):
         """The number of tasks in the suspended state.
         Returns:
-            int:
+            int: The suspended task count.
         """
         return self._data.statsTasksSuspended
 
@@ -2797,7 +2825,7 @@ class Job(object):
     def JobFailedTasks(self):
         """The number of tasks in the failed state.
         Returns:
-            int:
+            int: The failed task count.
         """
         return self._data.statsTasksFailed
 
@@ -2805,17 +2833,15 @@ class Job(object):
     @property
     def JobOverrideNotificationMethod(self):
         """If the user's notification method should be ignored.
+        Args:
+            value (bool): The override state.
         Returns:
-            bool:
+            bool: The override state.
         """
         return self._data.notificationMethodOverrideEnable
 
     @JobOverrideNotificationMethod.setter
     def JobOverrideNotificationMethod(self, value: bool):
-        """See getter.
-        Args:
-            value (bool)
-        """
         self._data.notificationMethodOverrideEnable = value
 
     @property
@@ -2823,14 +2849,14 @@ class Job(object):
         """The list of users that are to be
         notified when this job is complete.
         Returns:
-            list[str]:
+            list[str]: The users to notify.
         """
         return self._data.notificationTargets
 
     def SetJobNotificationTargets(self, userNames: list[str]):
         """Sets the list of users that are to be notified when this job is complete.
         Args:
-            userNames (list[str]):
+            userNames (list[str]): The users to notify.
         """
         self._data.notificationTargets = userNames
 
@@ -2839,9 +2865,9 @@ class Job(object):
         """If overriding the user's notification method,
         whether to use send a popup notification.
         Args:
-            value (bool)
+            value (bool): The popup show state.
         Returns:
-            bool:
+            bool: The popup show state.
         """
         return self._data.notificationPopupEnable
 
@@ -2852,17 +2878,15 @@ class Job(object):
     @property
     def JobEmailNotification(self):
         """If overriding the user's notification method, whether to use email notification.
+        Args:
+            value (bool): The override state.
         Returns:
-            bool:
+            bool: The override state.
         """
         return self._data.notificationEmailEnable
 
     @JobEmailNotification.setter
     def JobEmailNotification(self, value: bool):
-        """If overriding the user's notification method, whether to use email notification.
-        Args:
-            value (bool)
-        """
         self._data.notificationEmailEnable = value
 
     @property
@@ -2870,14 +2894,14 @@ class Job(object):
         """Arbitrary email addresses to send notifications
         to when this job is complete.
         Returns:
-            list[str]:
+            list[str]: The email addresses to notify.
         """
         return self._data.notificationEmails
 
     def SetJobNotificationEmails(self, emails: list[str]):
         """Sets the arbitrary email addresses to send notifications to when this job is complete.
         Args:
-            jobIds (list[int]):
+            jobIds (list[int]): The email addresses to notify.
         """
         self._data.notificationEmails = emails
 
@@ -2885,108 +2909,116 @@ class Job(object):
     def JobNotificationNote(self):
         """A note to append to the notification email
         sent out when the job is complete.
+        Args:
+            value (str): The note.
         Returns:
-            str:
+            str: The note.
         """
         return self._data.notificationNote
 
     @JobNotificationNote.setter
     def JobNotificationNote(self, value: str):
-        """See getter.
-        Args:
-            value (str)
-        """
         self._data.notificationNote = value
 
     # Job Maintenance
     @property
     def JobMaintenanceJob(self):
         """If this is a maintenance job.
+        Args:
+            value (bool): The maintenance state.
         Returns:
-            bool:
+            bool: The maintenance state.
         """
         return self._data.maintenanceJobEnable
+
+    @JobMaintenanceJob.setter
+    def JobMaintenanceJob(self, value):
+        self._data.maintenanceJobEnable = value
 
     @property
     def JobMaintenanceJobStartFrame(self):
         """The start frame for a maintenance job.
+        Args:
+            value (int): The frame.
         Returns:
-            int:
+            int: The frame.
         """
         return self._data.maintenanceJobStartFrame
 
+    @JobMaintenanceJobStartFrame.setter
+    def JobMaintenanceJobStartFrame(self, value):
+        self._data.maintenanceJobStartFrame = value
+
     @property
     def JobMaintenanceJobEndFrame(self):
-        """The start frame for a maintenance job.
+        """The end frame for a maintenance job.
+        Args:
+            value (int): The frame.
         Returns:
-            int:
+            int: The frame.
         """
         return self._data.maintenanceJobEndFrame
+
+    @JobMaintenanceJobEndFrame.setter
+    def JobMaintenanceJobEndFrame(self, value):
+        self._data.maintenanceJobEndFrame = value
 
     # Job Time Schedule
     @property
     def JobScheduledType(self):
         """The scheduling mode for this job.
         The options are "None", "Once", "Daily". or "Custom".
+        Args:
+            value (str): See enum for possible values.
         Returns:
-            string: "None", "Once", "Daily" or "Custom"
+            str: The enum value.
         """
         return self._data.scheduledType
 
     @JobScheduledType.setter
-    def JobScheduledType(self, value: str):
-        """See getter.
-        Args:
-            value (string)
-        """
+    def JobScheduledType(self, value: JobScheduledType):
         self._data.scheduledType = JobScheduledType(value)
 
     @property
     def JobScheduledDays(self):
         """The day interval for daily scheduled jobs.
+        Args:
+            value (int): The interval.
         Returns:
-            int:
+            int: The interval.
         """
         return self._data.scheduledDayInterval
 
     @JobScheduledDays.setter
     def JobScheduledDays(self, value: int):
-        """See getter.
-        Args:
-            value (int)
-        """
         self._data.scheduledDayInterval = value
 
     @property
     def JobScheduledStartDateTime(self):
         """The start date/time at which the scheduled job should start.
+        Args:
+            value (DateTime): The date time.
         Returns:
-            DateTime:
+            DateTime: The date time.
         """
         return self._data.scheduledDayTimeStart
 
     @JobScheduledStartDateTime.setter
     def JobScheduledStartDateTime(self, value: DateTime):
-        """See getter.
-        Args:
-            value (DateTime)
-        """
         self._data.scheduledDayTimeStart = value
 
     @property
     def JobScheduledStopDateTime(self):
         """The stop date/time at which the job should stop if it's still active.
+        Args:
+            value (DateTime): The date time.
         Returns:
-            DateTime:
+            DateTime: The date time.
         """
         return self._data.scheduledDayTimeEnd
 
     @JobScheduledStopDateTime.setter
     def JobScheduledStopDateTime(self, value: DateTime):
-        """See getter.
-        Args:
-            value (DateTime)
-        """
         self._data.scheduledDayTimeEnd = value
 
     @property
@@ -3000,245 +3032,219 @@ class Job(object):
     @property
     def JobMondayStartTime(self):
         """Gets or sets Monday's start time.
+        Args:
+            value (TimeSpan): The time.
         Returns:
-            TimeSpan:
+            TimeSpan: The time.
         """
         return self._data.scheduledDayMondayTimeStart
 
     @JobMondayStartTime.setter
     def JobMondayStartTime(self, value: TimeSpan):
-        """See getter.
-        Args:
-            value (TimeSpan)
-        """
         self._data.scheduledDayMondayTimeStart = value
 
     @property
     def JobMondayStopTime(self):
         """Gets or sets Monday's stop time.
+        Args:
+            value (TimeSpan): The time.
         Returns:
-            TimeSpan:
+            TimeSpan: The time.
         """
         return self._data.scheduledDayMondayTimeEnd
 
     @JobMondayStopTime.setter
     def JobMondayStopTime(self, value: TimeSpan):
-        """See getter.
-        Args:
-            value (TimeSpan)
-        """
         self._data.scheduledDayMondayTimeEnd = value
 
     @property
     def JobTuesdayStartTime(self):
         """Gets or sets Tuesday's start time.
+        Args:
+            value (TimeSpan): The time.
         Returns:
-            TimeSpan:
+            TimeSpan: The time.
         """
         return self._data.scheduledDayTuesdayTimeStart
 
     @JobTuesdayStartTime.setter
     def JobTuesdayStartTime(self, value: TimeSpan):
-        """See getter.
-        Args:
-            value (TimeSpan)
-        """
         self._data.scheduledDayTuesdayTimeStart = value
 
     @property
     def JobTuesdayStopTime(self):
         """Gets or sets Tuesday's stop time.
+        Args:
+            value (TimeSpan): The time.
         Returns:
-            TimeSpan:
+            TimeSpan: The time.
         """
         return self._data.scheduledDayTuesdayTimeEnd
 
     @JobTuesdayStopTime.setter
     def JobTuesdayStopTime(self, value: TimeSpan):
-        """See getter.
-        Args:
-            value (TimeSpan)
-        """
         self._data.scheduledDayTuesdayTimeEnd = value
 
     @property
     def JobWednesdayStartTime(self):
         """Gets or sets Wednesday's start time.
+        Args:
+            value (TimeSpan): The time.
         Returns:
-            TimeSpan:
+            TimeSpan: The time.
         """
         return self._data.scheduledDayWednesdayTimeStart
 
     @JobWednesdayStartTime.setter
     def JobWednesdayStartTime(self, value: TimeSpan):
-        """See getter.
-        Args:
-            value (TimeSpan)
-        """
         self._data.scheduledDayWednesdayTimeStart = value
 
     @property
     def JobWednesdayStopTime(self):
         """Gets or sets Wednesday's stop time.
+        Args:
+            value (TimeSpan): The time.
         Returns:
-            TimeSpan:
+            TimeSpan: The time.
         """
         return self._data.scheduledDayWednesdayTimeEnd
 
     @JobWednesdayStopTime.setter
     def JobWednesdayStopTime(self, value: TimeSpan):
-        """See getter.
-        Args:
-            value (TimeSpan)
-        """
         self._data.scheduledDayWednesdayTimeEnd = value
 
     @property
     def JobThursdayStartTime(self):
         """Gets or sets Thursday's start time.
+        Args:
+            value (TimeSpan): The time.
         Returns:
-            TimeSpan:
+            TimeSpan: The time.
         """
         return self._data.scheduledDayThursdayTimeStart
 
     @JobThursdayStartTime.setter
     def JobThursdayStartTime(self, value: TimeSpan):
-        """See getter.
-        Args:
-            value (TimeSpan)
-        """
         self._data.scheduledDayThursdayTimeStart = value
 
     @property
     def JobThursdayStopTime(self):
         """Gets or sets Thursday's stop time.
+        Args:
+            value (TimeSpan): The time.
         Returns:
-            TimeSpan:
+            TimeSpan: The time.
         """
         return self._data.scheduledDayThursdayTimeEnd
 
     @JobThursdayStartTime.setter
     def JobThursdayStopTime(self, value: TimeSpan):
-        """See getter.
-        Args:
-            value (TimeSpan)
-        """
         self._data.scheduledDayThursdayTimeEnd = value
 
     @property
     def JobFridayStartTime(self):
         """Gets or sets Friday's start time.
+        Args:
+            value (TimeSpan): The time.
         Returns:
-            TimeSpan:
+            TimeSpan: The time.
         """
         return self._data.scheduledDayFridayTimeStart
 
     @JobFridayStartTime.setter
     def JobFridayStartTime(self, value: TimeSpan):
-        """See getter.
-        Args:
-            value (TimeSpan)
-        """
         self._data.scheduledDayFridayTimeStart = value
 
     @property
     def JobFridayStopTime(self):
         """Gets or sets Friday's stop time.
+        Args:
+            value (TimeSpan): The time.
         Returns:
-            TimeSpan:
+            TimeSpan: The time.
         """
         return self._data.scheduledDayFridayTimeEnd
 
     @JobFridayStopTime.setter
     def JobFridayStopTime(self, value: TimeSpan):
-        """See getter.
-        Args:
-            value (TimeSpan)
-        """
         self._data.scheduledDayFridayTimeEnd = value
 
     @property
     def JobSaturdayStartTime(self):
         """Gets or sets Saturday's start time.
+        Args:
+            value (TimeSpan): The time.
         Returns:
-            TimeSpan:
+            TimeSpan: The time.
         """
         return self._data.scheduledDaySaturdayTimeStart
 
     @JobSaturdayStartTime.setter
     def JobSaturdayStartTime(self, value: TimeSpan):
-        """See getter.
-        Args:
-            value (TimeSpan)
-        """
         self._data.scheduledDaySaturdayTimeStart = value
 
     @property
     def JobSaturdayStopTime(self):
         """Gets or sets Saturday's stop time.
+        Args:
+            value (TimeSpan): The time.
         Returns:
-            TimeSpan:
+            TimeSpan: The time.
         """
         return self._data.scheduledDaySaturdayTimeEnd
 
     @JobSaturdayStopTime.setter
     def JobSaturdayStopTime(self, value: TimeSpan):
-        """See getter.
-        Args:
-            value (TimeSpan)
-        """
         self._data.scheduledDaySaturdayTimeEnd = value
 
     @property
     def JobSundayStartTime(self):
         """Gets or sets Sunday's start time.
+        Args:
+            value (TimeSpan): The time.
         Returns:
-            TimeSpan:
+            TimeSpan: The time.
         """
         return self._data.scheduledDaySundayTimeStart
 
     @JobSundayStartTime.setter
     def JobSundayStartTime(self, value: TimeSpan):
-        """See getter.
-        Args:
-            value (TimeSpan)
-        """
         self._data.scheduledDaySundayTimeStart = value
 
     @property
     def JobSundayStopTime(self):
         """Gets or sets Sunday's stop time.
+        Args:
+            value (TimeSpan): The time.
         Returns:
-            TimeSpan:
+            TimeSpan: The time.
         """
         return self._data.scheduledDaySundayTimeEnd
 
     @JobSundayStopTime.setter
     def JobSundayStopTime(self, value: TimeSpan):
-        """See getter.
-        Args:
-            value (TimeSpan)
-        """
         self._data.scheduledDaySundayTimeEnd = value
 
     # Job Tile Rendering
     @property
     def JobTileJob(self):
         """If this job is a tile job.
+        Args:
+            value (bool): The state.
         Returns:
-            bool:
+            bool: The state.
         """
         return self._data.tileEnable
 
     @JobTileJob.setter
-    def JobTileJob(self):
-        return self._data.tileEnable
+    def JobTileJob(self, value):
+        self._data.tileEnable = value
 
     @property
     def JobTileJobFrame(self):
         """The frame that the tile job is rendering.
         Returns:
-            int:
+            int: The frame.
         """
         return self._data.tileFrame
 
@@ -3260,7 +3266,7 @@ class Job(object):
     def JobTileJobTileCount(self):
         """The number of tiles in a tile job.
         Returns:
-            int:
+            int: The tile count.
         """
         return self._data.tileTilesCount
 
@@ -3270,7 +3276,7 @@ class Job(object):
         This is deprecated, and is only here for backwards
         compatibility.
         Returns:
-            int:
+            int: The number of tiles in x.
         """
         raise DeprecationWarning
 
@@ -3279,6 +3285,6 @@ class Job(object):
         """The number of tiles in Y for a tile job.
         This is deprecated, and is only here for backwards compatibility.
         Returns:
-            int:
+            int: The number of tiles in y.
         """
         raise DeprecationWarning
