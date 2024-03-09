@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import copy
+import datetime
 import enum
 import getpass
 import os
 import re
 from dataclasses import dataclass
-import datetime
 
 #########################################
 # Deadline Scripting API
@@ -316,6 +316,14 @@ class FrameList:
 #########################################
 
 
+def jobPermissionWrite(func):
+    def wrapper_method(*args, **kwargs):
+        cls_self = args[0]
+        if cls_self.JobId is not None:
+            raise Exception("'{}' can only be edited pre-submit.".format(func.__name__))
+        func(*args, **kwargs)
+    return wrapper_method
+
 class JobInternalData(dict):
     """Instead of storing nested dicts, we store the
     configuration state as a flat dict, so that we
@@ -499,6 +507,9 @@ class JobInternalData(dict):
         self.tileTilesInX = 0
         self.tileTilesInY = 0
 
+    def getChangeSet(self):
+        return self._changeSet
+
     def resetChangeTracker(self):
         self._changeSet.clear()
 
@@ -565,7 +576,7 @@ class Job(object):
             idx: data["Props"]["Ex{}".format(idx)] for idx in range(0, 10)
         }
         # Job Files
-        for pathMappingData in data["Props"]["PathMapping"]:
+        for pathMappingData in data["Props"]["PathMap"]:
             pathMappingRule = PathMappingRule(
                 Path=pathMappingData["Path"],
                 WindowsPath=pathMappingData["WindowsPath"],
@@ -721,6 +732,8 @@ class Job(object):
         self._data.tileTilesInX = data["TileX"]
         self._data.tileTilesInY = data["TileY"]
 
+        return self
+
     def serializeWebAPI(self) -> dict:
         """Serialize this class to the Web API compatible format.
         Returns:
@@ -756,9 +769,9 @@ class Job(object):
         for key, value in self._data.infoExtraIndexed.items():
             data["Props"]["Ex{}".format(key)] = value
         # Job Files
-        data["Props"]["PathMapping"] = []
+        data["Props"]["PathMap"] = []
         for pathMappingRule in self._data.filePathMapping:
-            data["Props"]["PathMapping"].append(
+            data["Props"]["PathMap"].append(
                 {
                     "Path": pathMappingRule.Path,
                     "WindowsPath": pathMappingRule.WindowsPath,
@@ -1169,7 +1182,6 @@ class Job(object):
 
         return jobData, pluginData, auxFilePaths
 
-
     def serializeSubmissionCommandlineFiles(
         self, jobFilePath: str, pluginFilePath: str
     ):
@@ -1179,12 +1191,14 @@ class Job(object):
             plugin_file_path (str): The plugin submission data file path.
         Returns:
             list[str]: A list of args to pass to deadlinecommand.
+
+        Returns:
+            str: The job data file path.
+            str: The plugin data file path.
+            list[str]: The list of auxiliary file paths.
+
         """
-
         jobData, pluginData, auxFilePaths = self.serializeSubmissionCommandlineDictionaries()
-
-        args = [jobFilePath, pluginFilePath]
-        args.extend(auxFilePaths)
 
         # Write job submission file
         with open(jobFilePath, "w") as job_file:
@@ -1200,7 +1214,7 @@ class Job(object):
                     value = "true" if value else "false"
                 plugin_file.write("{}={}\n".format(key, value))
 
-        return args
+        return jobFilePath, pluginFilePath, auxFilePaths
 
     #########################################
     # Deadline Scripting API
@@ -1209,6 +1223,7 @@ class Job(object):
     # additional setters have been added.
     # Differences:
     #   JobRepository -> Added Property
+    #   JobFramesPerTask -> Added Setter
     #   JobStatus -> Signature Enum JobStatus
     #             -> Added Property Setter
     #   JobOnJobComplete -> Signature Enum JobCompleteAction
@@ -1367,10 +1382,17 @@ class Job(object):
     @property
     def JobFramesPerTask(self):
         """The number of frames per task.
+        Args:
+            value (int): The frames per task.
         Returns:
-            int: Frames per task.
+            int: The frames per task.
         """
         return self._data.framesPerTask
+
+    @JobFramesPerTask.setter
+    @jobPermissionWrite
+    def JobFramesPerTask(self, value):
+        self._data.framesPerTask = value
 
     @property
     def JobSequentialJob(self):
