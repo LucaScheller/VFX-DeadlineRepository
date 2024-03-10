@@ -340,6 +340,7 @@ def jobPermissionRead(func):
         func(*args, **kwargs)
     return wrapper_method
 
+
 class JobInternalData(dict):
     """Instead of storing nested dicts, we store the
     configuration state as a flat dict, so that we
@@ -460,7 +461,7 @@ class JobInternalData(dict):
         self.dependencyResumeOnDeleted = False
         self.dependencyResumeOnFailed = False
         self.dependencyResumePendingPercentageValue = 100.0
-        self.dependencyFrameEnabled = True
+        self.dependencyFrameEnabled = False
         self.dependencyFrameOffsetStart = 0
         self.dependencyFrameOffsetEnd = 0
         self.dependencyJobs = []
@@ -559,6 +560,12 @@ class Job(object):
     #########################################
     # Public
     #########################################
+
+    def getInternalData(self):
+        return self._data
+
+    def setInternalData(self, data: JobInternalData):
+        self._data = data
 
     def deserializeWebAPI(self, data: dict) -> Job:
         """Deserialize this class from the Web API compatible format.
@@ -973,7 +980,7 @@ class Job(object):
         jobData["Sequential"] = self._data.framesSequential
         # Job Environment
         env_idx = -1
-        for key, value in self._data.environment:
+        for key, value in self._data.environment.items():
             env_idx += 1
             jobData["EnvironmentKeyValue{}".format(env_idx)] = "{}={}".format(
                 key, value
@@ -1235,6 +1242,11 @@ class Job(object):
                 plugin_file.write("{}={}\n".format(key, value))
 
         return jobFilePath, pluginFilePath, auxFilePaths
+
+    def duplicateJob(self):
+        job = Job()
+        job.setInternalData(copy.deepcopy(self.getInternalData()))
+        return job
 
     #########################################
     # Deadline Scripting API
@@ -2645,7 +2657,7 @@ class Job(object):
         """
         return self._data.dependencyJobs
 
-    def SetJobDependencyIDs(self, jobIds: list[int]):
+    def SetJobDependencyIDs(self, jobIds: list[str]):
         """Sets the IDs of the jobs that this job is dependent on.
         Args:
             jobIds (list[int]): The dependant job ids.

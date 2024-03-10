@@ -5,5 +5,5 @@ Category=Configuration
 CategoryOrder=0
 Index=0
 Description=The command to run.
-Required=true
+Required=false
 DisableIfBlank=false
