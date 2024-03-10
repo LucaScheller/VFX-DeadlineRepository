@@ -74,6 +74,16 @@ class OffsetDependency(BaseDependency):
 
 
 @dataclass
+class JobDependency(OffsetDependency):
+    JobID: str
+    OverrideResumeOn: bool
+    ResumeOnComplete: bool
+    ResumeOnDeleted: bool
+    ResumeOnFailed: bool
+    ResumeOnPercentageCompleted: bool
+    ResumeOnPercentageValue: float
+
+@dataclass
 class AssetDependency(OffsetDependency):
     FileName: str
     IsFrameAware: bool
@@ -675,7 +685,23 @@ class Job(object):
         self._data.dependencyFrameEnabled = data["Props"]["DepFrame"]
         self._data.dependencyFrameOffsetStart = data["Props"]["DepFrameStart"]
         self._data.dependencyFrameOffsetEnd = data["Props"]["DepFrameEnd"]
-        self._data.dependencyJobs = data["Props"]["Dep"]
+        self._data.dependencyJobs = [
+            JobDependency(
+                JobID=d["JobID"],
+                Notes=d["Notes"],
+                IgnoreFrameOffsets=d["IgnoreFrameOffsets"],
+                OverrideFrameOffsets=d["OverrideFrameOffsets"],
+                StartOffset=d["StartOffset"],
+                EndOffset=d["EndOffset"],
+                OverrideResumeOn=d["OverrideResumeOn"],
+                ResumeOnComplete=d["ResumeOnComplete"],
+                ResumeOnDeleted=d["ResumeOnDeleted"],
+                ResumeOnFailed=d["ResumeOnFailed"],
+                ResumeOnPercentageCompleted=d["ResumeOnPercentageCompleted"],
+                ResumeOnPercentageValue=d["ResumeOnPercentageValue"]
+            )
+            for d in data["Props"]["Dep"]
+        ]
         self._data.dependencyAssets = [
             AssetDependency(
                 FileName=d["FileName"],
@@ -872,7 +898,25 @@ class Job(object):
         data["Props"]["DepFrame"] = self._data.dependencyFrameEnabled
         data["Props"]["DepFrameStart"] = self._data.dependencyFrameOffsetStart
         data["Props"]["DepFrameEnd"] = self._data.dependencyFrameOffsetEnd
-        data["Props"]["Dep"] = self._data.dependencyJobs
+        data["Props"]["Dep"] = []
+        for jobDependency in self._data.dependencyJobs:
+            data["Props"]["Dep"].append(
+                {
+                    "JobID": jobDependency.JobID,
+                    "Notes": jobDependency.Notes,
+                    "IgnoreFrameOffsets": jobDependency.IgnoreFrameOffsets,
+                    "OverrideFrameOffsets": jobDependency.OverrideFrameOffsets,
+                    "StartOffset": jobDependency.StartOffset,
+                    "EndOffset": jobDependency.EndOffset,
+                    "OverrideResumeOn": jobDependency.OverrideResumeOn,
+                    "ResumeOnComplete": jobDependency.ResumeOnComplete,
+                    "ResumeOnDeleted": jobDependency.ResumeOnDeleted,
+                    "ResumeOnFailed": jobDependency.ResumeOnFailed,
+                    "ResumeOnPercentageCompleted": jobDependency.ResumeOnPercentageCompleted,
+                    "ResumeOnPercentageValue": jobDependency.ResumeOnPercentageValue,
+                }
+            )
+        
         data["Props"]["ReqAss"] = []
         for assetDependency in self._data.dependencyAssets:
             data["Props"]["ReqAss"].append(
@@ -1092,12 +1136,16 @@ class Job(object):
         jobData["FrameDependencyOffsetStart"] = self._data.dependencyFrameOffsetStart
         jobData["FrameDependencyOffsetEnd"] = self._data.dependencyFrameOffsetEnd
         if self._data.dependencyJobs:
-            jobData["JobDependencies"] = ",".join(self._data.dependencyJobs)
+            jobData["JobDependencies"] = ",".join([
+                jobDependency.JobID for jobDependency in self._data.dependencyJobs]
+            )
         if self._data.dependencyAssets:
-            jobData["RequiredAssets"] = self._data.dependencyAssets
+            jobData["RequiredAssets"] = ",".join([
+                assetDependency.FileName for assetDependency in self._data.dependencyAssets]
+            )
         if self._data.dependencyScripts:
             jobData["ScriptDependencies"] = ",".join(
-                [script.FileName for script in self._data.dependencyScripts]
+                [scriptDependency.FileName for scriptDependency in self._data.dependencyScripts]
             )
         # Job Cleanup
         jobData["OverrideAutoJobCleanup"] = self._data.cleanupAutomaticOverrideEnable
