@@ -1,0 +1,19 @@
+[State]
+Type=Enum
+Category=Options
+CategoryOrder=0
+CategoryIndex=0
+Items=Global Enabled;Opt-In;Disabled
+Label=State
+Default=Disabled
+Description=<html><head/><body><p>Perform Redis related functionality.</p></body></html>
+
+[EventKeyDelete]
+Type=Enum
+Category=Options
+CategoryOrder=0
+CategoryIndex=1
+Items=JobDelete;JobPurge
+Label=Remove Redis Keys On
+Default=JobDelete
+Description=<html><head/><body><p>This controls on what event to delete redis keys stored in the 'DL_JOB_REDIS_KEYS' job environment variable.</p></body></html>

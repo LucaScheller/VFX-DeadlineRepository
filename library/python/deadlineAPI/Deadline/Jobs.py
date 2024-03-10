@@ -670,6 +670,7 @@ class Job(object):
         self._data.pluginForceReload = data["Props"]["Reload"]
         self._data.pluginDirectoryCustom = data["Props"]["PlugDir"]
         # Job Event Plugins
+        self._data.eventOptIns = data["Props"]["EventOI"]
         self._data.eventSuppress = data["Props"]["NoEvnt"]
         self._data.eventDirectoryCustom = data["Props"]["EventDir"]
         # Job Pre/Post (Task) Scripts
@@ -882,7 +883,7 @@ class Job(object):
         data["Props"]["Reload"] = self._data.pluginForceReload
         data["Props"]["PlugDir"] = self._data.pluginDirectoryCustom
         # Job Event Plugins
-        data["Props"]["EventOI"] = ",".join(self._data.eventOptIns)
+        data["Props"]["EventOI"] = self._data.eventOptIns
         data["Props"]["NoEvnt"] = self._data.eventSuppress
         data["Props"]["EventDir"] = self._data.eventDirectoryCustom
         # Job Pre/Post (Task) Scripts
@@ -1332,6 +1333,7 @@ class Job(object):
     #   JobPostJobScript -> Add property setter 
     #                    -> Adjust doc string
     #   JobDependencies -> Add property
+    #   JobEventOptIns -> Add property
     #   JobMaintenanceJob -> Add property setter 
     #   JobMaintenanceJobStartFrame -> Add property setter 
     #   JobMaintenanceJobEndFrame -> Add property setter 
@@ -2522,6 +2524,20 @@ class Job(object):
         self._data.pluginDirectoryCustom = value
 
     # Job Event Plugins
+    @property
+    def JobEventOptIns(self):
+        """The event plugins to opt-in to.
+        Args:
+            value (list[str]): The list of event plugins.
+        Returns:
+            list[str]: The list of event plugins.
+        """
+        return self._data.eventOptIns
+
+    @JobEventOptIns.setter
+    def JobEventOptIns(self, value: list[str]):
+        self._data.eventOptIns = value
+    
     @property
     def JobSuppressEvents(self):
         """Whether or not this Job should suppress Events plugins.

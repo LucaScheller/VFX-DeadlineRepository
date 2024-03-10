@@ -14,6 +14,12 @@ def bool_to_env(value):
 class EnvironmentVariables:
     JOB_PENDING_REVIEW_RELEASE_STATE = "DL_JOB_PENDING_REVIEW_RELEASE_STATE"
     JOB_PENDING_REVIEW_RELEASE_INCREMENT = "DL_JOB_PENDING_REVIEW_RELEASE_INCREMENT"
+    JOB_REDIS_KEYS = "DL_JOB_REDIS_KEYS"
+
+
+class RedisServerConfiguration:
+    HOST = "localhost"
+    PORT = "6379"
 
 
 @dataclass
