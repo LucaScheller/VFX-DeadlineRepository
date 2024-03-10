@@ -366,7 +366,7 @@ class JobInternalData(dict):
         return super().__getattribute__(__name)
 
     def __setattr__(self, __name: str, __value: any) -> None:
-        if hasattr(self, "_change_set"):
+        if hasattr(self, "_changeSet"):
             self._changeSet.add(__name)
         return super().__setattr__(__name, __value)
 
@@ -470,7 +470,7 @@ class JobInternalData(dict):
         self.dependencyResumeOnCompleted = True
         self.dependencyResumeOnDeleted = False
         self.dependencyResumeOnFailed = False
-        self.dependencyResumePendingPercentageValue = 100.0
+        self.dependencyResumePendingPercentageValue = -1
         self.dependencyFrameEnabled = False
         self.dependencyFrameOffsetStart = 0
         self.dependencyFrameOffsetEnd = 0
@@ -1295,6 +1295,14 @@ class Job(object):
         job = Job()
         job.setInternalData(copy.deepcopy(self.getInternalData()))
         return job
+    
+    def applyChangeSet(self, job: Job):
+        """Apply the given job change set to the current job.
+        Args:
+            job (Job): A modified job.
+        """
+        for attrName in job._data.getChangeSet():
+            setattr(self._data, attrName, getattr(job._data, attrName))
 
     #########################################
     # Deadline Scripting API
@@ -1323,6 +1331,7 @@ class Job(object):
     #                   -> Adjust doc string
     #   JobPostJobScript -> Add property setter 
     #                    -> Adjust doc string
+    #   JobDependencies -> Add property
     #   JobMaintenanceJob -> Add property setter 
     #   JobMaintenanceJobStartFrame -> Add property setter 
     #   JobMaintenanceJobEndFrame -> Add property setter 
@@ -1393,9 +1402,11 @@ class Job(object):
 
     @JobPriority.setter
     def JobPriority(self, value: int):
-        if value > 100:
-            LOG.warning("Clamping job priority to the allowed max of 100")
-        self._data.priority = value
+        if value < 0:
+            LOG.warning("Clamping job priority to the allowed minimum of 0")
+        elif value > 100:
+            LOG.warning("Clamping job priority to the allowed maximum of 100")
+        self._data.priority = min(max(value, 0), 100)
 
     @property
     def JobProtected(self):
@@ -2685,7 +2696,7 @@ class Job(object):
 
     @property
     def JobFrameDependencyOffsetEnd(self):
-        """The end offset for frame depenencies.
+        """The end offset for frame dependencies.
         Args:
             value (int): The end offset.
         Returns:
@@ -2703,14 +2714,44 @@ class Job(object):
         Returns:
             list[str]: The dependant job ids.
         """
-        return self._data.dependencyJobs
+        return [jobDependency.JobID for jobDependency in self._data.dependencyJobs]
 
     def SetJobDependencyIDs(self, jobIds: list[str]):
         """Sets the IDs of the jobs that this job is dependent on.
         Args:
             jobIds (list[int]): The dependant job ids.
         """
-        self._data.dependencyJobs = jobIds
+        self._data.dependencyJobs = [
+            JobDependency(
+                JobID=jobId,
+                Notes="",
+                IgnoreFrameOffsets=False,
+                OverrideFrameOffsets=False,
+                StartOffset=0,
+                EndOffset=0,
+                OverrideResumeOn=False,
+                ResumeOnComplete=True,
+                ResumeOnDeleted=False,
+                ResumeOnFailed=False,
+                ResumeOnPercentageCompleted=False,
+                ResumeOnPercentageValue=100.0
+            )
+            for jobId in jobIds
+        ]
+
+    @property
+    def JobDependencies(self):
+        """The job dependencies that this job is dependent on.
+        Args:
+            value (list[JobDependency]): The job dependencies.
+        Returns:
+            list[JobDependency]: The job dependencies.
+        """
+        return self._data.dependencyJobs
+
+    @JobDependencies.setter
+    def JobDependencies(self, value: list[JobDependency]):
+        self._data.dependencyJobs = value
 
     @property
     def JobRequiredAssets(self):
