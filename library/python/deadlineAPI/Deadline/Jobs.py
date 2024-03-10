@@ -462,10 +462,10 @@ class JobInternalData(dict):
         self.eventSuppress = False
         self.eventDirectoryCustom = ""
         # Job Pre/Post (Task) Scripts
-        self.scriptPreJob = ""
-        self.scriptPostJob = ""
-        self.scriptPreTask = ""
-        self.scriptPostTask = ""
+        self.scriptJobPre = ""
+        self.scriptJobPost = ""
+        self.scriptJobTaskPre = ""
+        self.scriptJobTaskPost = ""
         # Job Dependencies
         self.dependencyResumeOnCompleted = True
         self.dependencyResumeOnDeleted = False
@@ -678,10 +678,10 @@ class Job(object):
         self._data.eventSuppress = data["Props"]["NoEvnt"]
         self._data.eventDirectoryCustom = data["Props"]["EventDir"]
         # Job Pre/Post (Task) Scripts
-        self._data.scriptPreJob = data["Props"]["PrJobScrp"]
-        self._data.scriptPostJob = data["Props"]["PoJobScrp"]
-        self._data.scriptPreTask = data["Props"]["PrTskScrp"]
-        self._data.scriptPostTask = data["Props"]["PoTskScrp"]
+        self._data.scriptJobPre = data["Props"]["PrJobScrp"]
+        self._data.scriptJobPost = data["Props"]["PoJobScrp"]
+        self._data.scriptJobTaskPre = data["Props"]["PrTskScrp"]
+        self._data.scriptJobTaskPost = data["Props"]["PoTskScrp"]
         # Job Dependencies
         self._data.dependencyResumeOnCompleted = data["Props"]["DepComp"]
         self._data.dependencyResumeOnDeleted = data["Props"]["DepDel"]
@@ -891,10 +891,10 @@ class Job(object):
         data["Props"]["NoEvnt"] = self._data.eventSuppress
         data["Props"]["EventDir"] = self._data.eventDirectoryCustom
         # Job Pre/Post (Task) Scripts
-        data["Props"]["PrJobScrp"] = self._data.scriptPreJob
-        data["Props"]["PoJobScrp"] = self._data.scriptPostJob
-        data["Props"]["PrTskScrp"] = self._data.scriptPreTask
-        data["Props"]["PoTskScrp"] = self._data.scriptPostTask
+        data["Props"]["PrJobScrp"] = self._data.scriptJobPre
+        data["Props"]["PoJobScrp"] = self._data.scriptJobPost
+        data["Props"]["PrTskScrp"] = self._data.scriptJobTaskPre
+        data["Props"]["PoTskScrp"] = self._data.scriptJobTaskPost
         # Job Dependencies
         data["Props"]["DepComp"] = self._data.dependencyResumeOnCompleted
         data["Props"]["DepDel"] = self._data.dependencyResumeOnDeleted
@@ -1124,10 +1124,10 @@ class Job(object):
         jobData["SuppressEvents"] = self._data.eventSuppress
         # data["Props"]["EventDir"] = self._data.custom_event_plugin_directory # TODO HINT NotImplemented
         # Job Pre/Post (Task) Scripts
-        jobData["PreJobScript"] = self._data.scriptPreJob
-        jobData["PostJobScript"] = self._data.scriptPostJob
-        jobData["PreTaskScript"] = self._data.scriptPreTask
-        jobData["PostTaskScript"] = self._data.scriptPostTask
+        jobData["PreJobScript"] = self._data.scriptJobPre
+        jobData["PostJobScript"] = self._data.scriptJobPost
+        jobData["PreTaskScript"] = self._data.scriptJobTaskPre
+        jobData["PostTaskScript"] = self._data.scriptJobTaskPost
         # Job Dependencies
         jobData["ResumeOnCompleteDependencies"] = (
             self._data.dependencyResumeOnCompleted
@@ -2590,11 +2590,11 @@ class Job(object):
         Returns:
             str: The job pre script file path.
         """
-        return self._data.scriptPreJob
+        return self._data.scriptJobPre
 
     @JobPreJobScript.setter
     def JobPreJobScript(self, value):
-        self._data.scriptPreJob = value
+        self._data.scriptJobPre = value
 
     @property
     def JobPostJobScript(self):
@@ -2605,11 +2605,11 @@ class Job(object):
         Returns:
             str: The job post script file path.
         """
-        return self._data.scriptPostJob
+        return self._data.scriptJobPost
 
     @JobPostJobScript.setter
     def JobPostJobScript(self, value):
-        self._data.scriptPostJob = value
+        self._data.scriptJobPost = value
 
     @property
     def JobPreTaskScript(self):
@@ -2619,11 +2619,11 @@ class Job(object):
         Returns:
             str: The task pre script file path.
         """
-        return self._data.scriptPreTask
+        return self._data.scriptJobTaskPre
 
     @JobPreTaskScript.setter
     def JobPreTaskScript(self, value: str):
-        self._data.scriptPreTask = value
+        self._data.scriptJobTaskPre = value
 
     @property
     def JobPostTaskScript(self):
@@ -2633,11 +2633,11 @@ class Job(object):
         Returns:
             str: The task post script file path.
         """
-        return self._data.scriptPostTask
+        return self._data.scriptJobTaskPost
 
     @JobPostTaskScript.setter
     def JobPostTaskScript(self, value: str):
-        self._data.scriptPostTask = value
+        self._data.scriptJobTaskPost = value
 
     # Job Dependencies
     @property
