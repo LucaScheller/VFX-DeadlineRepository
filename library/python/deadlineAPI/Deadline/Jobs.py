@@ -553,6 +553,8 @@ class Job(object):
         return self._data.infoExtraIndexed.get(idx, None)
 
     def _SetJobExtraInfoIndex(self, idx: int, value: str):
+        # Manually tag nested data.
+        self._data._changeSet.add("infoExtraIndexed")
         if value is None:
             self._data.infoExtraIndexed.pop(idx, None)
         else:
@@ -562,6 +564,8 @@ class Job(object):
         return self._data.taskInfoExtraNameIndexed.get(idx, None)
 
     def _SetJobTaskExtraInfoNameIndex(self, idx: int, value: str):
+        # Manually tag nested data.
+        self._data._changeSet.add("infoExtraIndexed")
         if value is None:
             self._data.taskInfoExtraNameIndexed.pop(idx, None)
         else:
@@ -1551,6 +1555,8 @@ class Job(object):
             key (str): The env variable name.
             value (str): The env variable value.
         """
+        # Manually tag nested data.
+        self._data._changeSet.add("environment")
         self._data.environment[key] = value
 
     def DeleteJobEnvironmentKey(self, key: str):
@@ -1558,6 +1564,8 @@ class Job(object):
         Args:
             key (str): The env variable name.
         """
+        # Manually tag nested data.
+        self._data._changeSet.add("environment")
         self._data.environment.pop(key, None)
 
     @property
@@ -1641,6 +1649,8 @@ class Job(object):
             key (str): The key name.
             value (str): The value.
         """
+        # Manually tag nested data.
+        self._data._changeSet.add("infoExtra")
         self._data.infoExtra[key] = value
 
     def DeleteJobExtraInfoKey(self, key: str):
@@ -1648,6 +1658,8 @@ class Job(object):
         Args:
             key (str): The key name.
         """
+        # Manually tag nested data.
+        self._data._changeSet.add("infoExtra")
         self._data.infoExtra.pop(key, None)
 
     @property
@@ -2492,6 +2504,8 @@ class Job(object):
             key (str):
             value (str):
         """
+        # Manually tag nested data.
+        self._data._changeSet.add("pluginInfo")
         self._data.pluginInfo[key] = value
 
     @property
