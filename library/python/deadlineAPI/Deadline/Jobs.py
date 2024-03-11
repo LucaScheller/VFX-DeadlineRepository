@@ -430,7 +430,7 @@ class JobInternalData(dict):
         self.taskConcurrencyLimit = 10
         self.taskConcurrencyLimitToNumberOfCpus = True
         # Job State
-        self.status = JobStatus.Unknown
+        self.status = JobStatus.Active
         self.statusErrorWarningSend = False
         self.statusFailureDetectionJobOverrideEnable = False
         self.statusFailureDetectionJobErrors = 0
@@ -547,6 +547,9 @@ class Job(object):
 
         # Track session only (non-deadline) data
         self.sessionData = {}
+
+    def __repr__(self) -> str:
+        return "Job('{}')".format(self._data.name)
 
     #########################################
     # Private
