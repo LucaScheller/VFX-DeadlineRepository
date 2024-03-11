@@ -545,6 +545,9 @@ class Job(object):
     def __init__(self) -> None:
         self._data = JobInternalData()
 
+        # Track session only (non-deadline) data
+        self.sessionData = {}
+
     #########################################
     # Private
     #########################################
